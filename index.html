@@ -5,8 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="apple-mobile-web-app-title" content="Protocol Duel" />
-  <title>PROTOCOL: DUEL // 1v1 Tactical Hero FPS</title>
+  <title>PROTOCOL: DUEL // Tactical 1v1 FPS</title>
   <style>
     * {
       box-sizing: border-box; margin: 0; padding: 0;
@@ -20,24 +19,23 @@
     }
     #gameCanvas { display: block; width: 100vw; height: 100dvh; touch-action: none; }
 
-    /* Pre-Match Lobby Overlay */
+    /* PRE-MATCH LOBBY */
     #lobby {
       position: fixed; inset: 0;
-      background: radial-gradient(circle at center, rgba(15,23,42,0.95), #05080c);
+      background: radial-gradient(circle at center, rgba(15,23,42,0.96), #05080c);
       display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
       z-index: 30; padding: 16px; overflow-y: auto; touch-action: pan-y;
     }
     .lobby-card {
-      width: min(1100px, 96vw); background: rgba(15, 23, 42, 0.92);
+      width: min(1080px, 96vw); background: rgba(15, 23, 42, 0.95);
       border: 1px solid #334155; border-radius: 12px; padding: 20px;
-      margin: auto; box-shadow: 0 20px 50px rgba(0,0,0,0.7);
+      margin: auto; box-shadow: 0 20px 50px rgba(0,0,0,0.8);
     }
-    .header-row { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
-    h1 { font-size: 24px; letter-spacing: 2px; color: #38bdf8; }
-    .net-badge {
-      font-size: 12px; background: #0f172a; border: 1px solid #38bdf8;
-      color: #38bdf8; padding: 4px 10px; border-radius: 999px; font-weight: 700;
+    .how-to-box {
+      background: rgba(2, 132, 199, 0.12); border: 1px solid #0284c7;
+      border-radius: 8px; padding: 12px 16px; margin-bottom: 14px; font-size: 13px; line-height: 1.5;
     }
+    .how-to-box strong { color: #38bdf8; }
     .grid-section {
       display: grid; grid-template-columns: repeat(auto-fit, minmax(155px, 1fr));
       gap: 8px; margin-bottom: 14px;
@@ -50,7 +48,7 @@
       background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 10px;
       cursor: pointer; transition: 0.15s; font-size: 12px;
     }
-    .tile.active { border-color: #38bdf8; background: rgba(56, 189, 248, 0.16); }
+    .tile.active { border-color: #38bdf8; background: rgba(56, 189, 248, 0.18); box-shadow: 0 0 12px rgba(56,189,248,0.25); }
     .tile strong { display: block; font-size: 14px; color: #f8fafc; margin-bottom: 3px; }
     .controls-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
     input, select, button {
@@ -58,71 +56,98 @@
       border-radius: 6px; font-size: 13px;
     }
     button.launch-btn {
-      background: #0284c7; border-color: #38bdf8; font-weight: 700; cursor: pointer; margin-left: auto;
-      padding: 10px 20px; font-size: 14px;
+      background: #0284c7; border-color: #38bdf8; font-weight: 800; cursor: pointer;
+      margin-left: auto; padding: 12px 24px; font-size: 15px;
     }
-    button.launch-btn:hover { background: #0369a1; }
 
-    /* In-Game Tactical HUD */
+    /* IN-GAME TACTICAL HUD */
     #hud { position: fixed; inset: 0; pointer-events: none; display: none; z-index: 10; }
-    #crosshair {
-      position: absolute; top: 50%; left: 50%; width: 16px; height: 16px;
-      transform: translate(-50%, -50%);
+
+    /* Top-Left Live 2D Tactical Minimap */
+    #minimapWrap {
+      position: absolute; top: 12px; left: 12px;
+      background: rgba(9, 13, 18, 0.88); border: 2px solid #38bdf8;
+      border-radius: 10px; padding: 6px; width: 176px;
     }
-    #crosshair::before, #crosshair::after { content: ''; position: absolute; background: #00f5d4; }
-    #crosshair::before { top: 7px; left: 0; width: 16px; height: 2px; }
-    #crosshair::after { left: 7px; top: 0; width: 2px; height: 16px; }
-    #hitIndicator {
-      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-      color: #f43f5e; font-weight: 900; font-size: 24px; opacity: 0; transition: opacity 0.1s;
+    #minimapCanvas { display: block; width: 160px; height: 160px; border-radius: 6px; background: #05080c; }
+    .minimap-legend { font-size: 10px; color: #94a3b8; text-align: center; margin-top: 4px; }
+
+    /* Top-Center Match Score & Objective Coach */
+    .top-center-wrap {
+      position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+      display: flex; flex-direction: column; align-items: center; gap: 6px;
     }
     .top-bar {
-      position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
-      background: rgba(15, 23, 42, 0.88); border: 1px solid #334155; border-radius: 8px;
+      background: rgba(15, 23, 42, 0.9); border: 1px solid #334155; border-radius: 8px;
       padding: 6px 14px; display: flex; gap: 14px; align-items: center; font-weight: 700; font-size: 12px;
       white-space: nowrap;
+    }
+    #coachBanner {
+      background: rgba(15, 23, 42, 0.92); border-left: 4px solid #38bdf8;
+      padding: 6px 14px; border-radius: 6px; font-size: 13px; font-weight: 600;
+      color: #f8fafc; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.5);
     }
     #touchToggleBtn, #lobbyReturnBtn {
       pointer-events: auto; background: #1e293b; border: 1px solid #475569;
       color: #38bdf8; padding: 4px 8px; border-radius: 4px; font-size: 11px; cursor: pointer;
     }
-    .bottom-left {
-      position: absolute; top: 54px; left: 14px; background: rgba(15, 23, 42, 0.82);
-      border: 1px solid #334155; border-radius: 8px; padding: 10px 14px; min-width: 205px;
+
+    /* Dynamic Expanding Recoil Crosshair */
+    #crosshairWrap {
+      position: absolute; top: 50%; left: 50%; width: 0; height: 0;
     }
-    .bottom-right {
-      position: absolute; top: 54px; right: 14px; background: rgba(15, 23, 42, 0.82);
-      border: 1px solid #334155; border-radius: 8px; padding: 10px 14px; text-align: right; min-width: 215px;
+    .ch-line { position: absolute; background: #00f5d4; box-shadow: 0 0 4px #000; }
+    #chTop    { width: 2px; height: 8px; left: -1px; top: -14px; }
+    #chBottom { width: 2px; height: 8px; left: -1px; top: 6px; }
+    #chLeft   { width: 8px; height: 2px; top: -1px; left: -14px; }
+    #chRight  { width: 8px; height: 2px; top: -1px; left: 6px; }
+    #chDot    { width: 2px; height: 2px; left: -1px; top: -1px; background: #fff; position: absolute; }
+
+    #hitIndicator {
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      color: #f43f5e; font-weight: 900; font-size: 26px; opacity: 0; transition: opacity 0.08s;
+    }
+
+    /* Floating Enemy 3D Tag */
+    #enemyTag {
+      position: absolute; transform: translate(-50%, -100%);
+      background: rgba(15, 23, 42, 0.85); border: 1px solid #f43f5e;
+      padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: 700;
+      color: #f8fafc; display: none; white-space: nowrap;
+    }
+    .enemy-hp-mini { width: 64px; height: 5px; background: #334155; margin-top: 2px; border-radius: 2px; }
+    #enemyHpMiniFill { height: 100%; background: #f43f5e; width: 100%; }
+
+    /* Player Telemetry Cards */
+    .status-left {
+      position: absolute; top: 215px; left: 12px; background: rgba(15, 23, 42, 0.88);
+      border: 1px solid #334155; border-radius: 8px; padding: 10px 14px; width: 176px;
+    }
+    .status-right {
+      position: absolute; top: 12px; right: 12px; background: rgba(15, 23, 42, 0.88);
+      border: 1px solid #334155; border-radius: 8px; padding: 10px 14px; text-align: right; min-width: 225px;
     }
     .hp-bar { width: 100%; height: 8px; background: #1e293b; border-radius: 4px; overflow: hidden; margin-top: 5px; }
     .hp-fill { height: 100%; background: #10b981; width: 100%; transition: width 0.15s; }
-    #acousticCompass {
-      position: absolute; top: 50%; left: 50%; width: 220px; height: 220px;
-      transform: translate(-50%, -50%); border-radius: 50%; pointer-events: none;
-    }
-    #killFeed { position: absolute; top: 150px; right: 14px; display: flex; flex-direction: column; gap: 5px; }
-    .feed-item { background: rgba(15,23,42,0.88); border-left: 3px solid #38bdf8; padding: 5px 10px; font-size: 12px; }
-    #blackoutBanner {
-      position: absolute; top: 50px; left: 50%; transform: translateX(-50%);
-      background: rgba(170, 0, 255, 0.9); padding: 5px 14px; border-radius: 4px; font-weight: 700; display: none;
-    }
+    #killFeed { position: absolute; top: 130px; right: 12px; display: flex; flex-direction: column; gap: 5px; }
+    .feed-item { background: rgba(15,23,42,0.9); border-left: 3px solid #38bdf8; padding: 5px 10px; font-size: 12px; }
 
-    /* iPad / Touch Controls Overlay */
+    /* iPAD / MOBILE TWIN-STICK TOUCH CONTROLS */
     #touchControls { position: fixed; inset: 0; pointer-events: none; display: none; z-index: 15; }
     #joystickZone {
       position: absolute; bottom: 26px; left: 26px; width: 148px; height: 148px;
-      border-radius: 50%; background: rgba(15, 23, 42, 0.45);
-      border: 2px solid rgba(56, 189, 248, 0.45); pointer-events: auto; touch-action: none;
+      border-radius: 50%; background: rgba(15, 23, 42, 0.48);
+      border: 2px solid rgba(56, 189, 248, 0.5); pointer-events: auto; touch-action: none;
     }
     #joystickQuietRing {
       position: absolute; top: 50%; left: 50%; width: 80px; height: 80px;
       transform: translate(-50%, -50%); border-radius: 50%;
-      border: 1px dashed rgba(148, 163, 184, 0.45); pointer-events: none;
+      border: 1px dashed rgba(148, 163, 184, 0.5); pointer-events: none;
     }
     #joystickKnob {
       position: absolute; top: 50%; left: 50%; width: 52px; height: 52px;
       transform: translate(-50%, -50%); border-radius: 50%;
-      background: rgba(56, 189, 248, 0.78); box-shadow: 0 0 12px rgba(56, 189, 248, 0.6);
+      background: rgba(56, 189, 248, 0.8); box-shadow: 0 0 12px rgba(56, 189, 248, 0.6);
       pointer-events: none;
     }
     #lookZone {
@@ -131,23 +156,20 @@
     }
     .t-btn {
       position: absolute; pointer-events: auto; touch-action: none;
-      border-radius: 50%; background: rgba(15, 23, 42, 0.78);
+      border-radius: 50%; background: rgba(15, 23, 42, 0.82);
       border: 2px solid #38bdf8; color: #f8fafc; font-weight: 800;
       display: flex; flex-direction: column; align-items: center; justify-content: center;
       font-size: 11px; cursor: pointer;
     }
     .t-btn:active, .t-btn.active-toggle { background: rgba(56, 189, 248, 0.45); }
-    #btnFire {
-      bottom: 38px; right: 38px; width: 86px; height: 86px;
-      background: rgba(244, 63, 94, 0.38); border-color: #f43f5e; font-size: 15px;
-    }
-    #btnCrouch { bottom: 28px; right: 142px; width: 58px; height: 58px; }
-    #btnJump   { bottom: 98px; right: 142px; width: 58px; height: 58px; }
-    #btnReload { bottom: 140px; right: 52px; width: 56px; height: 56px; }
-    #btnSwap   { bottom: 140px; right: 118px; width: 56px; height: 56px; }
-    #btnDef    { bottom: 206px; right: 106px; width: 60px; height: 60px; border-color: #22d3ee; }
-    #btnUlt    { bottom: 206px; right: 34px; width: 60px; height: 60px; border-color: #f59e0b; color: #fde68a; }
-    #btnDoor   { bottom: 190px; left: 50px; width: 56px; height: 56px; border-color: #eab308; }
+    #btnFire   { bottom: 36px; right: 36px; width: 88px; height: 88px; background: rgba(244, 63, 94, 0.42); border-color: #f43f5e; font-size: 15px; }
+    #btnCrouch { bottom: 28px; right: 140px; width: 58px; height: 58px; }
+    #btnJump   { bottom: 96px; right: 140px; width: 58px; height: 58px; }
+    #btnReload { bottom: 138px; right: 50px; width: 56px; height: 56px; }
+    #btnSwap   { bottom: 138px; right: 116px; width: 56px; height: 56px; }
+    #btnDef    { bottom: 204px; right: 104px; width: 60px; height: 60px; border-color: #22d3ee; }
+    #btnUlt    { bottom: 204px; right: 32px; width: 60px; height: 60px; border-color: #f59e0b; color: #fde68a; }
+    #btnDoor   { bottom: 186px; left: 48px; width: 56px; height: 56px; border-color: #eab308; }
   </style>
 </head>
 <body>
@@ -155,74 +177,99 @@
   <!-- PRE-MATCH TACTICAL LOBBY -->
   <div id="lobby">
     <div class="lobby-card">
-      <div class="header-row">
-        <div>
-          <h1>PROTOCOL: DUEL</h1>
-          <p style="font-size:12px; color:#94a3b8;">1v1 Tactical Hero FPS — GitHub Pages, iPad Touch & Desktop Ready</p>
-        </div>
-        <span class="net-badge" id="netStatusBadge">NETWORK: INITIALIZING...</span>
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+        <h1>PROTOCOL: DUEL // TACTICAL 1v1 FPS</h1>
+        <span id="netStatusBadge" style="font-size:12px; color:#38bdf8; font-weight:700;">ENGINE READY</span>
       </div>
 
-      <p style="font-size:12px; color:#38bdf8; margin-bottom:6px; font-weight:700;">1. SELECT OPERATIVE (6 HEROES)</p>
+      <div class="how-to-box">
+        <strong>HOW TO PLAY & WIN:</strong><br/>
+        1. <strong>Phase 1 (Hunt & Listen):</strong> Watch the <strong>Top-Left Radar Minimap</strong>. When the enemy runs or shoots, <strong>Red Sonar Circles</strong> appear on your minimap showing their location. Hold <strong>Shift</strong> (or half-tilt joystick) to walk quietly, or press <strong>C</strong> (Crouch) to move 100% silently.<br/>
+        2. <strong>Phase 2 (Real Recoil & Accuracy):</strong> Moving while shooting makes your crosshair expand and bullets miss! <strong>Stop moving or Crouch right before firing</strong>, and pull down slightly to control weapon recoil kick.<br/>
+        3. <strong>Abilities:</strong> Press <strong>E</strong> for your Hero's Defensive tool (Dash, Shield, Smoke, Cloak, Barrier, Deflect) and <strong>Q</strong> when your Ultimate hits 100%.
+      </div>
+
+      <p style="font-size:12px; color:#38bdf8; margin-bottom:6px; font-weight:700;">1. CHOOSE YOUR HERO (6 OPERATIVES)</p>
       <div class="grid-section" id="heroGrid"></div>
 
-      <p style="font-size:12px; color:#38bdf8; margin-bottom:6px; font-weight:700;">2. SELECT ARENA (5 LAUNCH MAPS)</p>
+      <p style="font-size:12px; color:#38bdf8; margin-bottom:6px; font-weight:700;">2. CHOOSE ARENA (5 MAPS)</p>
       <div class="map-grid" id="mapGrid"></div>
 
       <div class="controls-row">
-        <input id="playerName" value="Operative_01" placeholder="Callsign" style="width:140px;" />
-        <input id="roomId" value="duel-arena-1" placeholder="Room ID (Match Code)" style="width:150px;" />
+        <input id="playerName" value="Operative_01" placeholder="Callsign" style="width:135px;" />
+        <input id="roomId" value="duel-1" placeholder="Room ID" style="width:120px;" />
         <select id="modeSelect">
           <option value="stock">Stock Mode (3 Lives)</option>
           <option value="timer">Timer Mode (3:00 Clock)</option>
         </select>
-        <select id="roleSelect" title="For GitHub Pages 1v1 between 2 devices">
-          <option value="host">Host Room / Solo vs AI</option>
+        <select id="roleSelect">
+          <option value="host">Solo vs AI / Host 1v1 Room</option>
           <option value="join">Join Friend's Room ID (1v1 P2P)</option>
         </select>
         <label style="font-size:12px; display:flex; align-items:center; gap:5px; cursor:pointer;">
-          <input type="checkbox" id="botToggle" checked /> Spawn AI Duelist
+          <input type="checkbox" id="botToggle" checked /> Spawn AI Enemy
         </label>
-        <button class="launch-btn" id="deployBtn">DEPLOY TO ARENA</button>
+        <button class="launch-btn" id="deployBtn">START MATCH</button>
       </div>
-      <p style="font-size:11px; color:#94a3b8; margin-top:10px; line-height:1.4;">
-        <strong>PC Controls:</strong> WASD Move | Shift Walk (Quiet) | C Crouch (Silent) | Space Jump | LMB Fire | 1/2 Swap | R Reload | E Defensive | Q Ultimate | F Door<br/>
-        <strong>iPad Controls:</strong> Left Stick (Inner Ring = Quiet Walk, Outer = Sprint) | Drag Right Screen = Aim | Tap Action Buttons<br/>
-        <strong>GitHub Pages 1v1 (PC vs iPad):</strong> Uncheck "Spawn AI Duelist". Device 1 picks <em>Host Room</em> with Room ID <code>duel-arena-1</code>; Device 2 picks <em>Join Friend's Room ID</em> with the same Room ID.
-      </p>
     </div>
   </div>
 
   <!-- IN-GAME HUD -->
   <div id="hud">
-    <div class="top-bar">
-      <span id="hudMapName">THE FOUNDRY</span>
-      <span id="hudModeStat" style="color:#38bdf8;">STOCKS: 3 vs 3</span>
-      <span id="hudScore">ELIMS: 0 - 0</span>
-      <button id="touchToggleBtn">TOUCH HUD: AUTO</button>
-      <button id="lobbyReturnBtn">LOBBY</button>
+    <!-- Top-Left Live 2D Minimap -->
+    <div id="minimapWrap">
+      <canvas id="minimapCanvas" width="160" height="160"></canvas>
+      <div class="minimap-legend">CYAN: You | RED RING: Enemy Sound</div>
     </div>
-    <div id="blackoutBanner">NEURAL BLACKOUT ACTIVE — TELEMETRY SCRAMBLED</div>
-    <div id="crosshair"></div>
-    <div id="hitIndicator">✕</div>
-    <canvas id="acousticCompass" width="220" height="220"></canvas>
-    <div id="killFeed"></div>
 
-    <div class="bottom-left">
+    <!-- Top-Center Score & Live Tactical Coach -->
+    <div class="top-center-wrap">
+      <div class="top-bar">
+        <span id="hudMapName">THE FOUNDRY</span>
+        <span id="hudModeStat" style="color:#38bdf8;">STOCKS: 3 vs 3</span>
+        <span id="hudScore">SCORE: 0 - 0</span>
+        <button id="touchToggleBtn">TOUCH: AUTO</button>
+        <button id="lobbyReturnBtn">LEAVE</button>
+      </div>
+      <div id="coachBanner">HUNT PHASE: Follow Red Sound Rings on the Top-Left Radar!</div>
+    </div>
+
+    <!-- Dynamic Recoil & Spread Crosshair -->
+    <div id="crosshairWrap">
+      <div class="ch-line" id="chTop"></div>
+      <div class="ch-line" id="chBottom"></div>
+      <div class="ch-line" id="chLeft"></div>
+      <div class="ch-line" id="chRight"></div>
+      <div id="chDot"></div>
+    </div>
+    <div id="hitIndicator">✕</div>
+
+    <!-- Floating Enemy Name & Health Bar -->
+    <div id="enemyTag">
+      <span id="enemyTagName">ENEMY</span>
+      <div class="enemy-hp-mini"><div id="enemyHpMiniFill"></div></div>
+    </div>
+
+    <!-- Left Player Health & Noise Telemetry -->
+    <div class="status-left">
       <div style="display:flex; justify-content:space-between; font-size:12px; font-weight:700;">
         <span id="hudHeroName">VEX</span>
         <span id="hudStance" style="color:#38bdf8;">STAND</span>
       </div>
       <div style="font-size:20px; font-weight:800; margin-top:2px;" id="hudHpText">100 HP</div>
       <div class="hp-bar"><div class="hp-fill" id="hudHpFill"></div></div>
+      <div style="font-size:11px; color:#94a3b8; margin-top:6px;" id="hudSurfaceText">Floor: Concrete (1.0x noise)</div>
     </div>
 
-    <div class="bottom-right">
+    <!-- Right Weapon & Ability Status -->
+    <div class="status-right">
       <div style="font-size:13px; font-weight:700; color:#38bdf8;" id="hudWeaponName">SR-9 Talon</div>
       <div style="font-size:22px; font-weight:800; margin:2px 0;" id="hudAmmo">8 / 8</div>
-      <div style="font-size:11px; color:#cbd5e1;" id="hudDefStatus">[E] Phase Step: READY</div>
-      <div style="font-size:11px; color:#f59e0b; margin-top:2px;" id="hudUltStatus">[Q] Echo Pulse: 25%</div>
+      <div style="font-size:11px; color:#22d3ee; font-weight:600;" id="hudDefStatus">[E] Phase Step: READY</div>
+      <div style="font-size:11px; color:#f59e0b; font-weight:600; margin-top:2px;" id="hudUltStatus">[Q] Echo Pulse: 25%</div>
     </div>
+
+    <div id="killFeed"></div>
   </div>
 
   <!-- iPAD / MOBILE TWIN-STICK TOUCH CONTROLS -->
@@ -244,156 +291,199 @@
 
   <canvas id="gameCanvas"></canvas>
 
-  <!-- CDN Libraries: Three.js + Socket.io Client + PeerJS (for Serverless GitHub Pages 1v1) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 
   <script>
     // ========================================================================
-    // 1. SHARED GAME CATALOG (6 HEROES & 5 MAPS)
+    // 1. PROCEDURAL WEB AUDIO SYNTHESIZER (Gunshots, Footsteps, Hit Dings)
+    // ========================================================================
+    class SoundFX {
+      constructor() { this.ctx = null; }
+      init() {
+        if (!this.ctx) {
+          const AC = window.AudioContext || window.webkitAudioContext;
+          if (AC) this.ctx = new AC();
+        }
+        if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
+      }
+      playShot(silenced = false, heavy = false) {
+        if (!this.ctx) return;
+        const now = this.ctx.currentTime;
+        // Noise burst for gunshot punch
+        const bufSize = this.ctx.sampleRate * (heavy ? 0.22 : 0.12);
+        const buf = this.ctx.createBuffer(1, bufSize, this.ctx.sampleRate);
+        const data = buf.getChannelData(0);
+        for (let i = 0; i < bufSize; i++) data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (this.ctx.sampleRate * (heavy ? 0.06 : 0.03)));
+        const noise = this.ctx.createBufferSource();
+        noise.buffer = buf;
+
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(silenced ? 750 : (heavy ? 1800 : 3200), now);
+
+        const gain = this.ctx.createGain();
+        gain.gain.setValueAtTime(silenced ? 0.16 : (heavy ? 0.45 : 0.3), now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + (heavy ? 0.21 : 0.11));
+
+        noise.connect(filter);
+        filter.connect(gain);
+        gain.connect(this.ctx.destination);
+        noise.start(now);
+      }
+      playStep(surface = 'concrete') {
+        if (!this.ctx) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = surface === 'metal' ? 'triangle' : 'sine';
+        osc.frequency.setValueAtTime(surface === 'metal' ? 240 : (surface === 'wood' ? 140 : 95), now);
+        osc.frequency.exponentialRampToValueAtTime(40, now + 0.06);
+        gain.gain.setValueAtTime(surface === 'metal' ? 0.14 : 0.07, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.065);
+        osc.connect(gain); gain.connect(this.ctx.destination);
+        osc.start(now); osc.stop(now + 0.07);
+      }
+      playHit(isHeadshot = false) {
+        if (!this.ctx) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(isHeadshot ? 1350 : 680, now);
+        gain.gain.setValueAtTime(0.22, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+        osc.connect(gain); gain.connect(this.ctx.destination);
+        osc.start(now); osc.stop(now + 0.11);
+      }
+    }
+    const sfx = new SoundFX();
+
+    // ========================================================================
+    // 2. SIX (6) HEROES & FIVE (5) MAPS CATALOG
     // ========================================================================
     const HEROES = {
       vex: {
-        id: 'vex', name: 'VEX', role: 'Recon Anchor', color: 0x00e5ff, maxHp: 100, speed: 7.2,
-        primary: { name: 'SR-9 Talon (Rifle)', dmg: 68, headMult: 2.13, fireRateMs: 750, mag: 8, reloadMs: 1800, spread: 0.002, recoilPitch: 0.065, recoilYaw: 0.008, pellets: 1, noiseRadius: 38, pattern: 'single' },
-        secondary: { name: 'P4-Whisper (Silenced)', dmg: 25, headMult: 2.0, fireRateMs: 165, mag: 12, reloadMs: 1200, spread: 0.012, recoilPitch: 0.018, recoilYaw: 0.005, pellets: 1, noiseRadius: 11, pattern: 'semi-silenced' },
-        defensive: { name: 'Phase Step', cdMs: 14000, durationMs: 350 },
-        ultimate: { name: 'Echo Pulse', cost: 1000, durationMs: 6000 }
+        id: 'vex', name: 'VEX', role: 'Recon Sniper', color: 0x00e5ff, maxHp: 100, speed: 7.2,
+        primary: { name: 'SR-9 Talon (Single-Shot Rifle)', dmg: 68, headMult: 2.13, fireRateMs: 700, mag: 8, reloadMs: 1600, baseSpread: 0.001, moveSpread: 0.065, recoilPitch: 0.075, recoilYaw: 0.01, pellets: 1, noiseRadius: 38, pattern: 'single' },
+        secondary: { name: 'P4-Whisper (Silenced Pistol)', dmg: 26, headMult: 2.0, fireRateMs: 170, mag: 12, reloadMs: 1100, baseSpread: 0.006, moveSpread: 0.025, recoilPitch: 0.022, recoilYaw: 0.006, pellets: 1, noiseRadius: 10, pattern: 'semi-silenced' },
+        defensive: { name: 'Phase Step (Dash)', cdMs: 12000, durationMs: 400 },
+        ultimate: { name: 'Echo Pulse (Wallhack)', cost: 1000, durationMs: 6500 }
       },
       krosh: {
-        id: 'krosh', name: 'KROSH', role: 'Breacher', color: 0xff5722, maxHp: 125, speed: 6.6,
-        primary: { name: 'M88 Slag (Shotgun)', dmg: 12, headMult: 1.5, fireRateMs: 850, mag: 6, reloadMs: 2100, spread: 0.065, recoilPitch: 0.08, recoilYaw: 0.035, pellets: 10, noiseRadius: 42, pattern: 'shotgun' },
-        secondary: { name: 'Vulcan .50 (Revolver)', dmg: 56, headMult: 2.0, fireRateMs: 460, mag: 6, reloadMs: 1700, spread: 0.006, recoilPitch: 0.055, recoilYaw: 0.012, pellets: 1, noiseRadius: 36, pattern: 'revolver' },
-        defensive: { name: 'Aegis Bulwark', cdMs: 16000, durationMs: 4500 },
-        ultimate: { name: 'Seismic Overdrive', cost: 1100, durationMs: 4000 }
+        id: 'krosh', name: 'KROSH', role: 'Shotgun Breacher', color: 0xff5722, maxHp: 125, speed: 6.7,
+        primary: { name: 'M88 Slag (Lever Shotgun)', dmg: 13, headMult: 1.5, fireRateMs: 800, mag: 6, reloadMs: 1900, baseSpread: 0.055, moveSpread: 0.03, recoilPitch: 0.095, recoilYaw: 0.03, pellets: 10, noiseRadius: 42, pattern: 'shotgun' },
+        secondary: { name: 'Vulcan .50 (Heavy Revolver)', dmg: 56, headMult: 2.0, fireRateMs: 440, mag: 6, reloadMs: 1500, baseSpread: 0.004, moveSpread: 0.045, recoilPitch: 0.065, recoilYaw: 0.015, pellets: 1, noiseRadius: 36, pattern: 'revolver' },
+        defensive: { name: 'Aegis Shield (Block)', cdMs: 14000, durationMs: 4200 },
+        ultimate: { name: 'Seismic Slam (+50 Armor & Slow)', cost: 1050, durationMs: 4500 }
       },
       cipher: {
-        id: 'cipher', name: 'CIPHER', role: 'Tactician', color: 0xaa00ff, maxHp: 100, speed: 7.4,
-        primary: { name: 'VX-3 Hornet (Burst SMG)', dmg: 20, headMult: 2.0, fireRateMs: 260, mag: 27, reloadMs: 1500, spread: 0.014, recoilPitch: 0.022, recoilYaw: 0.018, pellets: 1, noiseRadius: 28, pattern: 'burst' },
-        secondary: { name: 'G-18 Stinger (Auto-Pistol)', dmg: 14, headMult: 1.8, fireRateMs: 75, mag: 18, reloadMs: 1300, spread: 0.032, recoilPitch: 0.026, recoilYaw: 0.022, pellets: 1, noiseRadius: 25, pattern: 'auto' },
-        defensive: { name: 'Dynamic Smoke Wall', cdMs: 15000, durationMs: 6000 },
-        ultimate: { name: 'Neural Blackout', cost: 1050, durationMs: 8000 }
+        id: 'cipher', name: 'CIPHER', role: 'Burst Tactician', color: 0xaa00ff, maxHp: 100, speed: 7.4,
+        primary: { name: 'VX-3 Hornet (3-Burst SMG)', dmg: 21, headMult: 2.0, fireRateMs: 270, mag: 27, reloadMs: 1400, baseSpread: 0.008, moveSpread: 0.035, recoilPitch: 0.024, recoilYaw: 0.016, pellets: 1, noiseRadius: 28, pattern: 'burst' },
+        secondary: { name: 'G-18 Stinger (Auto-Pistol)', dmg: 15, headMult: 1.8, fireRateMs: 78, mag: 18, reloadMs: 1200, baseSpread: 0.022, moveSpread: 0.04, recoilPitch: 0.026, recoilYaw: 0.022, pellets: 1, noiseRadius: 25, pattern: 'auto' },
+        defensive: { name: 'Smoke Wall (Cover)', cdMs: 14000, durationMs: 6000 },
+        ultimate: { name: 'Neural EMP (Reveal + Jam)', cost: 1000, durationMs: 7000 }
       },
       sable: {
-        id: 'sable', name: 'SABLE', role: 'Silent Lurker', color: 0x00e676, maxHp: 100, speed: 7.7,
-        primary: { name: 'KR-7 Spectre (Carbine)', dmg: 26, headMult: 2.0, fireRateMs: 92, mag: 24, reloadMs: 1550, spread: 0.015, recoilPitch: 0.02, recoilYaw: 0.014, pellets: 1, noiseRadius: 15, pattern: 'auto-silenced' },
-        secondary: { name: 'Volt-2 (Sensor Pistol)', dmg: 22, headMult: 1.5, fireRateMs: 400, mag: 4, reloadMs: 1400, spread: 0.008, recoilPitch: 0.012, recoilYaw: 0.004, pellets: 1, noiseRadius: 10, pattern: 'sensor' },
-        defensive: { name: 'Mirage Cloak', cdMs: 17000, durationMs: 2600 },
-        ultimate: { name: 'Shadow Stalker', cost: 1000, durationMs: 10000 }
+        id: 'sable', name: 'SABLE', role: 'Silent Flanker', color: 0x00e676, maxHp: 100, speed: 7.7,
+        primary: { name: 'KR-7 Spectre (Silenced Carbine)', dmg: 26, headMult: 2.0, fireRateMs: 95, mag: 24, reloadMs: 1450, baseSpread: 0.009, moveSpread: 0.038, recoilPitch: 0.022, recoilYaw: 0.014, pellets: 1, noiseRadius: 14, pattern: 'auto-silenced' },
+        secondary: { name: 'Volt-2 (Taser Pistol)', dmg: 28, headMult: 1.5, fireRateMs: 360, mag: 6, reloadMs: 1200, baseSpread: 0.005, moveSpread: 0.02, recoilPitch: 0.015, recoilYaw: 0.005, pellets: 1, noiseRadius: 10, pattern: 'sensor' },
+        defensive: { name: 'Mirage Cloak (Stealth)', cdMs: 15000, durationMs: 3000 },
+        ultimate: { name: 'Shadow Stalker (Silent Sprint)', cost: 1000, durationMs: 9000 }
       },
       bastion: {
-        id: 'bastion', name: 'BASTION', role: 'Zone Controller', color: 0xffc400, maxHp: 115, speed: 6.8,
-        primary: { name: 'HMG-42 Anvil (Battle Rifle)', dmg: 39, headMult: 2.0, fireRateMs: 135, mag: 20, reloadMs: 2000, spread: 0.011, recoilPitch: 0.038, recoilYaw: 0.01, pellets: 1, noiseRadius: 40, pattern: 'wallbang' },
-        secondary: { name: 'Flare-X (Incendiary)', dmg: 32, headMult: 1.4, fireRateMs: 650, mag: 3, reloadMs: 1600, spread: 0.01, recoilPitch: 0.03, recoilYaw: 0.005, pellets: 1, noiseRadius: 26, pattern: 'incendiary' },
-        defensive: { name: 'Hardlight Barricade', cdMs: 16000, durationMs: 7000 },
-        ultimate: { name: 'Lockdown Array', cost: 1150, durationMs: 9000 }
+        id: 'bastion', name: 'BASTION', role: 'Heavy Anchor', color: 0xffc400, maxHp: 115, speed: 6.8,
+        primary: { name: 'HMG-42 Anvil (Heavy Rifle)', dmg: 39, headMult: 2.0, fireRateMs: 135, mag: 20, reloadMs: 1850, baseSpread: 0.007, moveSpread: 0.055, recoilPitch: 0.042, recoilYaw: 0.012, pellets: 1, noiseRadius: 40, pattern: 'wallbang' },
+        secondary: { name: 'Flare-X (Incendiary)', dmg: 36, headMult: 1.4, fireRateMs: 550, mag: 4, reloadMs: 1400, baseSpread: 0.008, moveSpread: 0.025, recoilPitch: 0.032, recoilYaw: 0.005, pellets: 1, noiseRadius: 26, pattern: 'incendiary' },
+        defensive: { name: 'Hardlight Wall (320 HP Cover)', cdMs: 15000, durationMs: 7000 },
+        ultimate: { name: 'Lockdown Zap (Door Lock + Shock)', cost: 1100, durationMs: 8000 }
       },
       volt: {
-        id: 'volt', name: 'VOLT', role: 'Kinetic Duelist', color: 0x2979ff, maxHp: 100, speed: 7.5,
-        primary: { name: 'AR-11 Pulse (Energy AR)', dmg: 24, headMult: 2.0, fireRateMs: 80, mag: 28, reloadMs: 1450, spread: 0.013, recoilPitch: 0.021, recoilYaw: 0.009, pellets: 1, noiseRadius: 30, pattern: 'ramping' },
-        secondary: { name: 'Mag-Shot (Ricochet)', dmg: 34, headMult: 2.0, fireRateMs: 280, mag: 8, reloadMs: 1350, spread: 0.007, recoilPitch: 0.03, recoilYaw: 0.008, pellets: 1, noiseRadius: 28, pattern: 'ricochet' },
-        defensive: { name: 'Kinetic Deflector', cdMs: 15000, durationMs: 1300 },
-        ultimate: { name: 'Chrono Rewind', cost: 1100, durationMs: 6000 }
+        id: 'volt', name: 'VOLT', role: 'Kinetic Duelist', color: 0x2979ff, maxHp: 100, speed: 7.6,
+        primary: { name: 'AR-11 Pulse (Ramping AR)', dmg: 24, headMult: 2.0, fireRateMs: 82, mag: 28, reloadMs: 1350, baseSpread: 0.008, moveSpread: 0.036, recoilPitch: 0.023, recoilYaw: 0.01, pellets: 1, noiseRadius: 30, pattern: 'ramping' },
+        secondary: { name: 'Mag-Shot (Wall Ricochet)', dmg: 35, headMult: 2.0, fireRateMs: 260, mag: 8, reloadMs: 1250, baseSpread: 0.004, moveSpread: 0.025, recoilPitch: 0.032, recoilYaw: 0.008, pellets: 1, noiseRadius: 28, pattern: 'ricochet' },
+        defensive: { name: 'Kinetic Deflector (Block + Reload)', cdMs: 14000, durationMs: 1500 },
+        ultimate: { name: 'Chrono Rewind (Recall 2.5s)', cost: 1050, durationMs: 6000 }
       }
     };
 
     const MAPS = {
       foundry: {
-        id: 'foundry', name: 'The Foundry', subtitle: 'High-Verticality Catwalks & Noisy Metal Flooring',
-        ambientColor: 0x2a1a14, fogColor: 0x1a0f0a, floorMat: 'concrete',
-        spawns: [{ x: -22, y: 0, z: -22, yaw: -Math.PI / 4 }, { x: 22, y: 4, z: 22, yaw: (3 * Math.PI) / 4 }],
+        id: 'foundry', name: 'The Foundry', subtitle: 'Elevated Metal Catwalks (1.8x Footstep Noise) & Smelting Vat',
+        ambientColor: 0x2a1c17, fogColor: 0x140d0a, floorMat: 'concrete',
+        spawns: [{ x: -22, y: 0, z: -22, yaw: -Math.PI * 0.75 }, { x: 22, y: 0, z: 22, yaw: Math.PI * 0.25 }],
         structures: [
-          { x: 0, y: 5, z: -30, w: 60, h: 10, d: 2, mat: 'concrete', color: 0x3a322d },
-          { x: 0, y: 5, z: 30, w: 60, h: 10, d: 2, mat: 'concrete', color: 0x3a322d },
-          { x: -30, y: 5, z: 0, w: 2, h: 10, d: 60, mat: 'concrete', color: 0x3a322d },
-          { x: 30, y: 5, z: 0, w: 2, h: 10, d: 60, mat: 'concrete', color: 0x3a322d },
-          { x: 0, y: 2.5, z: 0, w: 10, h: 5, d: 10, mat: 'metal', color: 0x8c2d19 },
-          { x: -14, y: 3.8, z: 0, w: 6, h: 0.4, d: 44, mat: 'metal', color: 0x606870, walkable: true },
-          { x: 14, y: 3.8, z: 0, w: 6, h: 0.4, d: 44, mat: 'metal', color: 0x606870, walkable: true },
-          { x: 0, y: 3.8, z: -16, w: 22, h: 0.4, d: 5, mat: 'metal', color: 0x606870, walkable: true },
-          { x: 0, y: 3.8, z: 16, w: 22, h: 0.4, d: 5, mat: 'metal', color: 0x606870, walkable: true },
-          { x: -14, y: 1.9, z: -24, w: 5, h: 3.8, d: 6, mat: 'metal', color: 0x50555c, ramp: true },
-          { x: 14, y: 1.9, z: 24, w: 5, h: 3.8, d: 6, mat: 'metal', color: 0x50555c, ramp: true },
-          { x: -8, y: 2, z: -9, w: 3, h: 4, d: 3, mat: 'concrete', color: 0x4b423c },
-          { x: 8, y: 2, z: 9, w: 3, h: 4, d: 3, mat: 'concrete', color: 0x4b423c }
+          { x: 0, y: 2.5, z: 0, w: 9, h: 5, d: 9, mat: 'metal', color: 0x9a3412 },
+          { x: -14, y: 3.6, z: 0, w: 5, h: 0.4, d: 36, mat: 'metal', color: 0x64748b, walkable: true },
+          { x: 14, y: 3.6, z: 0, w: 5, h: 0.4, d: 36, mat: 'metal', color: 0x64748b, walkable: true },
+          { x: 0, y: 3.6, z: -15, w: 23, h: 0.4, d: 4.5, mat: 'metal', color: 0x64748b, walkable: true },
+          { x: 0, y: 3.6, z: 15, w: 23, h: 0.4, d: 4.5, mat: 'metal', color: 0x64748b, walkable: true },
+          { x: -14, y: 1.8, z: -21, w: 5, h: 3.6, d: 6, mat: 'metal', color: 0x475569, ramp: true },
+          { x: 14, y: 1.8, z: 21, w: 5, h: 3.6, d: 6, mat: 'metal', color: 0x475569, ramp: true },
+          { x: -7, y: 2, z: -8, w: 3, h: 4, d: 3, mat: 'concrete', color: 0x57534e },
+          { x: 7, y: 2, z: 8, w: 3, h: 4, d: 3, mat: 'concrete', color: 0x57534e }
         ],
         doors: []
       },
       subzero: {
-        id: 'subzero', name: 'Sub-Zero Station', subtitle: 'Tight Arctic Corridors & Dynamic Blast Doors',
-        ambientColor: 0x162636, fogColor: 0x102030, floorMat: 'snow',
-        spawns: [{ x: -24, y: 0, z: 0, yaw: -Math.PI / 2 }, { x: 24, y: 0, z: 0, yaw: Math.PI / 2 }],
+        id: 'subzero', name: 'Sub-Zero Station', subtitle: 'Tight Lab Corridors, Interactive Blast Doors [F] & Snow Flanks',
+        ambientColor: 0x1e293b, fogColor: 0x0f172a, floorMat: 'snow',
+        spawns: [{ x: -23, y: 0, z: 0, yaw: -Math.PI / 2 }, { x: 23, y: 0, z: 0, yaw: Math.PI / 2 }],
         structures: [
-          { x: 0, y: 4, z: -30, w: 60, h: 8, d: 2, mat: 'concrete', color: 0x627d98 },
-          { x: 0, y: 4, z: 30, w: 60, h: 8, d: 2, mat: 'concrete', color: 0x627d98 },
-          { x: -30, y: 4, z: 0, w: 2, h: 8, d: 60, mat: 'concrete', color: 0x627d98 },
-          { x: 30, y: 4, z: 0, w: 2, h: 8, d: 60, mat: 'concrete', color: 0x627d98 },
-          { x: 0, y: 3, z: -10, w: 28, h: 6, d: 2, mat: 'metal', color: 0xd9e2ec },
-          { x: 0, y: 3, z: 10, w: 28, h: 6, d: 2, mat: 'metal', color: 0xd9e2ec },
-          { x: -5, y: 1.8, z: 0, w: 3, h: 3.6, d: 3, mat: 'metal', color: 0x00b4d8 },
-          { x: 5, y: 1.8, z: 0, w: 3, h: 3.6, d: 3, mat: 'metal', color: 0x00b4d8 },
-          { x: 0, y: 1.5, z: -22, w: 12, h: 3, d: 4, mat: 'snow', color: 0xf0f4f8 },
-          { x: 0, y: 1.5, z: 22, w: 12, h: 3, d: 4, mat: 'snow', color: 0xf0f4f8 }
+          { x: 0, y: 2.5, z: -9, w: 24, h: 5, d: 2, mat: 'metal', color: 0xcbd5e1 },
+          { x: 0, y: 2.5, z: 9, w: 24, h: 5, d: 2, mat: 'metal', color: 0xcbd5e1 },
+          { x: -5, y: 2, z: 0, w: 3, h: 4, d: 3, mat: 'metal', color: 0x0284c7 },
+          { x: 5, y: 2, z: 0, w: 3, h: 4, d: 3, mat: 'metal', color: 0x0284c7 },
+          { x: 0, y: 1.8, z: -20, w: 12, h: 3.6, d: 3.5, mat: 'snow', color: 0xe2e8f0 },
+          { x: 0, y: 1.8, z: 20, w: 12, h: 3.6, d: 3.5, mat: 'snow', color: 0xe2e8f0 }
         ],
         doors: [
-          { id: 'cryo_west', x: -14, y: 2.5, z: 0, w: 1.5, h: 5, d: 8, open: false },
-          { id: 'cryo_east', x: 14, y: 2.5, z: 0, w: 1.5, h: 5, d: 8, open: false }
+          { id: 'cryo_west', x: -12, y: 2.5, z: 0, w: 1.5, h: 5, d: 8, open: false },
+          { id: 'cryo_east', x: 12, y: 2.5, z: 0, w: 1.5, h: 5, d: 8, open: false }
         ]
       },
       overpass: {
-        id: 'overpass', name: 'Overpass Hub', subtitle: 'Long Sniper Sightlines & Subterranean Tunnels',
-        ambientColor: 0x1f2430, fogColor: 0x12151e, floorMat: 'concrete',
-        spawns: [{ x: -25, y: 0, z: -20, yaw: 0 }, { x: 25, y: 0, z: 20, yaw: Math.PI }],
+        id: 'overpass', name: 'Overpass Hub', subtitle: 'Elevated Sniper Bridge Balanced by Flank Underpass',
+        ambientColor: 0x1e2430, fogColor: 0x0f131a, floorMat: 'concrete',
+        spawns: [{ x: -24, y: 0, z: -20, yaw: -Math.PI / 2 }, { x: 24, y: 0, z: 20, yaw: Math.PI / 2 }],
         structures: [
-          { x: 0, y: 5, z: -30, w: 60, h: 10, d: 2, mat: 'concrete', color: 0x333942 },
-          { x: 0, y: 5, z: 30, w: 60, h: 10, d: 2, mat: 'concrete', color: 0x333942 },
-          { x: -30, y: 5, z: 0, w: 2, h: 10, d: 60, mat: 'concrete', color: 0x333942 },
-          { x: 30, y: 5, z: 0, w: 2, h: 10, d: 60, mat: 'concrete', color: 0x333942 },
-          { x: 0, y: 4.2, z: -18, w: 50, h: 0.5, d: 8, mat: 'concrete', color: 0x525c6a, walkable: true },
-          { x: -24, y: 2.1, z: -12, w: 6, h: 4.2, d: 6, mat: 'concrete', color: 0x454e59, ramp: true },
-          { x: 24, y: 2.1, z: -12, w: 6, h: 4.2, d: 6, mat: 'concrete', color: 0x454e59, ramp: true },
-          { x: 0, y: 2.5, z: 14, w: 42, h: 5, d: 2, mat: 'concrete', color: 0x2b303a },
-          { x: 0, y: 4.8, z: 21, w: 42, h: 0.6, d: 14, mat: 'concrete', color: 0x22262e, walkable: true },
-          { x: 0, y: 2.0, z: -2, w: 22, h: 4.0, d: 4.5, mat: 'metal', color: 0x2b5876 }
+          { x: 0, y: 3.8, z: -16, w: 40, h: 0.4, d: 7, mat: 'concrete', color: 0x64748b, walkable: true },
+          { x: -22, y: 1.9, z: -16, w: 6, h: 3.8, d: 6, mat: 'concrete', color: 0x475569, ramp: true },
+          { x: 22, y: 1.9, z: -16, w: 6, h: 3.8, d: 6, mat: 'concrete', color: 0x475569, ramp: true },
+          { x: 0, y: 2.2, z: 0, w: 18, h: 4.4, d: 4.5, mat: 'metal', color: 0x0369a1 },
+          { x: -10, y: 2.2, z: 14, w: 12, h: 4.4, d: 2.5, mat: 'concrete', color: 0x334155 },
+          { x: 10, y: 2.2, z: 14, w: 12, h: 4.4, d: 2.5, mat: 'concrete', color: 0x334155 }
         ],
         doors: []
       },
       sanctuary: {
-        id: 'sanctuary', name: 'The Sanctuary', subtitle: 'Sound-Muffling Gardens & Wooden Chokepoints',
-        ambientColor: 0x1b2a1e, fogColor: 0x0f1911, floorMat: 'grass',
-        spawns: [{ x: -23, y: 0, z: 23, yaw: -Math.PI / 4 }, { x: 23, y: 0, z: -23, yaw: (3 * Math.PI) / 4 }],
+        id: 'sanctuary', name: 'The Sanctuary', subtitle: 'Sound-Muffling Grass Courtyard (0.4x Noise) & Creaky Wood Shrine',
+        ambientColor: 0x1a2e22, fogColor: 0x0b160f, floorMat: 'grass',
+        spawns: [{ x: -22, y: 0, z: 22, yaw: -Math.PI / 4 }, { x: 22, y: 0, z: -22, yaw: (3 * Math.PI) / 4 }],
         structures: [
-          { x: 0, y: 4, z: -30, w: 60, h: 8, d: 2, mat: 'wood', color: 0x4a3525 },
-          { x: 0, y: 4, z: 30, w: 60, h: 8, d: 2, mat: 'wood', color: 0x4a3525 },
-          { x: -30, y: 4, z: 0, w: 2, h: 8, d: 60, mat: 'wood', color: 0x4a3525 },
-          { x: 30, y: 4, z: 0, w: 2, h: 8, d: 60, mat: 'wood', color: 0x4a3525 },
-          { x: 0, y: 2.2, z: 0, w: 18, h: 0.4, d: 18, mat: 'wood', color: 0x7c4d2b, walkable: true },
-          { x: 0, y: 1.1, z: -11, w: 6, h: 2.2, d: 4, mat: 'wood', color: 0x6b4226, ramp: true },
-          { x: 0, y: 1.1, z: 11, w: 6, h: 2.2, d: 4, mat: 'wood', color: 0x6b4226, ramp: true },
-          { x: -18, y: 2.5, z: 0, w: 2, h: 5, d: 16, mat: 'wood', color: 0x5c3a21 },
-          { x: 18, y: 2.5, z: 0, w: 2, h: 5, d: 16, mat: 'wood', color: 0x5c3a21 }
+          { x: 0, y: 2.2, z: 0, w: 16, h: 0.4, d: 16, mat: 'wood', color: 0x92400e, walkable: true },
+          { x: 0, y: 1.1, z: -10, w: 5, h: 2.2, d: 4, mat: 'wood', color: 0x78350f, ramp: true },
+          { x: 0, y: 1.1, z: 10, w: 5, h: 2.2, d: 4, mat: 'wood', color: 0x78350f, ramp: true },
+          { x: -15, y: 2.2, z: 0, w: 2.5, h: 4.4, d: 14, mat: 'wood', color: 0x7c2d12 },
+          { x: 15, y: 2.2, z: 0, w: 2.5, h: 4.4, d: 14, mat: 'wood', color: 0x7c2d12 }
         ],
         doors: []
       },
       aegis: {
-        id: 'aegis', name: 'Aegis Bunker', subtitle: 'Underground Silo & Central Control Room',
-        ambientColor: 0x142228, fogColor: 0x0a1216, floorMat: 'concrete',
-        spawns: [{ x: 0, y: 0, z: -25, yaw: Math.PI }, { x: 0, y: 0, z: 25, yaw: 0 }],
+        id: 'aegis', name: 'Aegis Bunker', subtitle: 'Central Elevated Control Room & Dynamic Silo Doors [F]',
+        ambientColor: 0x16242c, fogColor: 0x091116, floorMat: 'concrete',
+        spawns: [{ x: 0, y: 0, z: -24, yaw: Math.PI }, { x: 0, y: 0, z: 24, yaw: 0 }],
         structures: [
-          { x: 0, y: 5, z: -30, w: 60, h: 10, d: 2, mat: 'concrete', color: 0x24343d },
-          { x: 0, y: 5, z: 30, w: 60, h: 10, d: 2, mat: 'concrete', color: 0x24343d },
-          { x: -30, y: 5, z: 0, w: 2, h: 10, d: 60, mat: 'concrete', color: 0x24343d },
-          { x: 30, y: 5, z: 0, w: 2, h: 10, d: 60, mat: 'concrete', color: 0x24343d },
-          { x: 0, y: 2.8, z: 0, w: 16, h: 0.4, d: 16, mat: 'metal', color: 0x37515f, walkable: true },
-          { x: -10, y: 1.4, z: 0, w: 4, h: 2.8, d: 5, mat: 'metal', color: 0x2c424e, ramp: true },
-          { x: 10, y: 1.4, z: 0, w: 4, h: 2.8, d: 5, mat: 'metal', color: 0x2c424e, ramp: true },
-          { x: -20, y: 2.5, z: -14, w: 3, h: 5, d: 12, mat: 'concrete', color: 0x2f4450 },
-          { x: 20, y: 2.5, z: 14, w: 3, h: 5, d: 12, mat: 'concrete', color: 0x2f4450 }
+          { x: 0, y: 2.6, z: 0, w: 15, h: 0.4, d: 15, mat: 'metal', color: 0x475569, walkable: true },
+          { x: -9.5, y: 1.3, z: 0, w: 4, h: 2.6, d: 5, mat: 'metal', color: 0x334155, ramp: true },
+          { x: 9.5, y: 1.3, z: 0, w: 4, h: 2.6, d: 5, mat: 'metal', color: 0x334155, ramp: true },
+          { x: -16, y: 2.2, z: -12, w: 3, h: 4.4, d: 10, mat: 'concrete', color: 0x334155 },
+          { x: 16, y: 2.2, z: 12, w: 3, h: 4.4, d: 10, mat: 'concrete', color: 0x334155 }
         ],
         doors: [
-          { id: 'silo_north', x: 0, y: 2.5, z: -14, w: 8, h: 5, d: 1.5, open: true },
-          { id: 'silo_south', x: 0, y: 2.5, z: 14, w: 8, h: 5, d: 1.5, open: true }
+          { id: 'silo_north', x: 0, y: 2.5, z: -12, w: 8, h: 5, d: 1.5, open: true },
+          { id: 'silo_south', x: 0, y: 2.5, z: 12, w: 8, h: 5, d: 1.5, open: true }
         ]
       }
     };
@@ -401,74 +491,60 @@
     const SURFACE_MULT = { metal: 1.8, wood: 1.6, concrete: 1.0, snow: 0.75, grass: 0.4 };
 
     // ========================================================================
-    // 2. HYBRID SOCKET.IO + GITHUB PAGES SERVERLESS ADAPTER
+    // 3. HYBRID SOCKET.IO + GITHUB PAGES SERVERLESS ADAPTER
     // ========================================================================
     class HybridSocketAdapter {
       constructor() {
         this.id = 'local_player_1';
         this.handlers = {};
-        this.mode = 'serverless'; // 'socketio' | 'serverless' | 'p2p-client'
+        this.mode = 'serverless';
         this.realSocket = null;
         this.peer = null;
         this.peerConn = null;
         this.room = null;
-        this.initNetwork();
+        setTimeout(() => this.initNetwork(), 20);
       }
-
-      on(event, fn) {
-        this.handlers[event] = fn;
-      }
-
-      triggerClient(event, data) {
-        if (this.handlers[event]) this.handlers[event](data);
-      }
+      on(ev, fn) { this.handlers[ev] = fn; }
+      triggerClient(ev, data) { if (this.handlers[ev]) this.handlers[ev](data); }
 
       initNetwork() {
         const badge = document.getElementById('netStatusBadge');
-        // If running on localhost with Node server.js, try real Socket.io first
-        const isStaticHost = location.hostname.includes('github.io') || location.protocol === 'file:';
-        if (!isStaticHost && typeof io !== 'undefined') {
-          const sock = io({ reconnectionAttempts: 1, timeout: 1500 });
+        const isStatic = location.hostname.includes('github.io') || location.protocol === 'file:';
+        if (!isStatic && typeof io !== 'undefined') {
+          const sock = io({ reconnectionAttempts: 1, timeout: 1200 });
           sock.on('connect', () => {
-            this.mode = 'socketio';
-            this.id = sock.id;
-            this.realSocket = sock;
-            badge.textContent = 'NETWORK: SOCKET.IO SERVER ONLINE';
-            badge.style.borderColor = '#10b981';
-            badge.style.color = '#10b981';
-            ['initCatalog', 'matchState', 'doorState', 'worldTick', 'acousticPing', 'hitMarker', 'killFeed', 'matchOver', 'timerSync'].forEach((ev) => {
-              sock.on(ev, (payload) => this.triggerClient(ev, payload));
+            this.mode = 'socketio'; this.id = sock.id; this.realSocket = sock;
+            badge.textContent = 'SOCKET.IO SERVER CONNECTED';
+            ['initCatalog', 'matchState', 'doorState', 'worldTick', 'acousticPing', 'hitMarker', 'killFeed', 'matchOver', 'timerSync', 'tracerFx'].forEach((ev) => {
+              sock.on(ev, (p) => this.triggerClient(ev, p));
             });
           });
-          sock.on('connect_error', () => {
-            sock.close();
-            this.activateServerlessEngine(badge);
-          });
+          sock.on('connect_error', () => { sock.close(); this.startServerless(badge); });
         } else {
-          this.activateServerlessEngine(badge);
+          this.startServerless(badge);
         }
       }
 
-      activateServerlessEngine(badge) {
+      startServerless(badge) {
         this.mode = 'serverless';
-        badge.textContent = 'NETWORK: GITHUB PAGES HYBRID ENGINE READY';
-        setTimeout(() => this.triggerClient('initCatalog', { heroes: HEROES, maps: MAPS }), 50);
+        badge.textContent = 'GITHUB PAGES ENGINE READY';
+        this.triggerClient('initCatalog', { heroes: HEROES, maps: MAPS });
       }
 
-      emit(event, data) {
-        if (this.mode === 'socketio' && this.realSocket) {
-          this.realSocket.emit(event, data);
-          return;
-        }
+      emit(ev, data) {
+        if (this.mode === 'socketio' && this.realSocket) { this.realSocket.emit(ev, data); return; }
         if (this.mode === 'p2p-client' && this.peerConn && this.peerConn.open) {
-          this.peerConn.send({ event, data, senderId: this.id });
-          return;
+          this.peerConn.send({ event: ev, data, senderId: this.id }); return;
         }
-        this.handleAuthoritativeEvent(this.id, event, data);
+        this.handleServerEvent(this.id, ev, data);
       }
 
-      // Embedded Authoritative Server for GitHub Pages (Supports Solo AI + WebRTC 1v1)
-      createPlayer(id, name, heroId, spawn, isBot = false) {
+      broadcast(ev, payload) {
+        this.triggerClient(ev, payload);
+        if (this.peerConn && this.peerConn.open) this.peerConn.send({ event: ev, payload });
+      }
+
+      createPlayer(id, name, heroId, spawn, isBot) {
         const h = HEROES[heroId] || HEROES.vex;
         return {
           id, name, isBot, heroId: h.id,
@@ -477,63 +553,37 @@
           stocks: 3, kills: 0, deaths: 0, weaponSlot: 'primary',
           ammo: { primary: h.primary.mag, secondary: h.secondary.mag },
           reloadingUntil: 0, defCdUntil: 0, defActiveUntil: 0,
-          ultCharge: 250, ultMax: h.ultimate.cost, ultActiveUntil: 0,
+          ultCharge: 300, ultMax: h.ultimate.cost, ultActiveUntil: 0,
           slowedUntil: 0, blackoutUntil: 0, revealedUntil: 0,
-          lastShotAt: 0, lastStepAt: 0, history: []
+          lastShotAt: 0, lastStepAt: 0, history: [], patrolAngle: 0
         };
       }
 
-      broadcast(event, payload) {
-        this.triggerClient(event, payload);
-        if (this.peerConn && this.peerConn.open) {
-          this.peerConn.send({ event, payload });
-        }
-      }
-
-      sendTo(targetId, event, payload) {
-        if (targetId === this.id) {
-          this.triggerClient(event, payload);
-        } else if (this.peerConn && this.peerConn.open) {
-          this.peerConn.send({ event, payload });
-        }
-      }
-
       setupP2P(roomId, role, joinPayload) {
-        const cleanRoom = 'protocol-duel-' + roomId.replace(/[^a-z0-9]/gi, '').toLowerCase();
         if (typeof Peer === 'undefined') return;
-
+        const cleanId = 'pduel-room-' + roomId.replace(/[^a-z0-9]/gi, '').toLowerCase();
         if (role === 'host') {
-          this.peer = new Peer(cleanRoom);
+          this.peer = new Peer(cleanId);
           this.peer.on('connection', (conn) => {
             this.peerConn = conn;
-            conn.on('data', (msg) => {
-              if (msg.event) this.handleAuthoritativeEvent(msg.senderId || 'peer_player_2', msg.event, msg.data);
-            });
+            conn.on('data', (msg) => { if (msg.event) this.handleServerEvent(msg.senderId || 'peer_2', msg.event, msg.data); });
           });
         } else {
-          this.mode = 'p2p-client';
-          this.id = 'peer_player_2';
+          this.mode = 'p2p-client'; this.id = 'peer_2';
           this.peer = new Peer();
           this.peer.on('open', () => {
-            const conn = this.peer.connect(cleanRoom);
+            const conn = this.peer.connect(cleanId);
             this.peerConn = conn;
-            conn.on('open', () => {
-              conn.send({ event: 'joinMatch', data: joinPayload, senderId: this.id });
-            });
-            conn.on('data', (msg) => {
-              if (msg.event) this.triggerClient(msg.event, msg.payload);
-            });
+            conn.on('open', () => conn.send({ event: 'joinMatch', data: joinPayload, senderId: this.id }));
+            conn.on('data', (msg) => { if (msg.event) this.triggerClient(msg.event, msg.payload); });
           });
         }
       }
 
-      handleAuthoritativeEvent(pid, event, data) {
-        if (event === 'joinMatch') {
+      handleServerEvent(pid, ev, data) {
+        if (ev === 'joinMatch') {
           const role = document.getElementById('roleSelect').value;
-          if (pid === this.id && role === 'join') {
-            this.setupP2P(data.roomId, 'join', data);
-            return;
-          }
+          if (pid === this.id && role === 'join') { this.setupP2P(data.roomId, 'join', data); return; }
           if (!this.room) {
             const mId = MAPS[data.mapId] ? data.mapId : 'foundry';
             this.room = {
@@ -542,7 +592,7 @@
               doors: JSON.parse(JSON.stringify(MAPS[mId].doors))
             };
             if (pid === this.id) this.setupP2P(data.roomId, 'host', data);
-            this.startServerLoops();
+            this.startLoop();
           }
           const map = MAPS[this.room.mapId];
           const idx = Object.keys(this.room.players).length % 2;
@@ -550,8 +600,8 @@
 
           if (data.spawnBot && Object.keys(this.room.players).length < 2) {
             const pool = Object.keys(HEROES).filter((k) => k !== data.heroId);
-            const botHero = pool[Math.floor(Math.random() * pool.length)];
-            this.room.players['bot_1'] = this.createPlayer('bot_1', `AI // ${HEROES[botHero].name}`, botHero, map.spawns[1], true);
+            const bHero = pool[Math.floor(Math.random() * pool.length)];
+            this.room.players['bot_1'] = this.createPlayer('bot_1', `AI // ${HEROES[bHero].name}`, bHero, map.spawns[1], true);
           }
 
           this.broadcast('matchState', {
@@ -566,47 +616,47 @@
         const now = Date.now();
         const hero = HEROES[p.heroId];
 
-        if (event === 'moveUpdate') {
+        if (ev === 'moveUpdate') {
           const dist = Math.hypot(data.x - p.x, data.z - p.z);
           p.x = data.x; p.y = data.y; p.z = data.z;
           p.yaw = data.yaw; p.pitch = data.pitch; p.stance = data.stance;
           p.history.push({ t: now, x: p.x, y: p.y, z: p.z, hp: p.hp });
-          if (p.history.length > 55) p.history.shift();
+          if (p.history.length > 50) p.history.shift();
 
-          if (dist > 0.07 && p.stance !== 'crouch') {
-            const base = p.stance === 'walk' ? 4.5 : 18.0;
-            if (now - p.lastStepAt > (p.stance === 'walk' ? 520 : 310)) {
+          if (dist > 0.05 && p.stance !== 'crouch') {
+            const base = p.stance === 'walk' ? 5.0 : 18.0;
+            if (now - p.lastStepAt > (p.stance === 'walk' ? 480 : 290)) {
               p.lastStepAt = now;
               this.emitNoise(p, base, 'footstep');
             }
           }
-        } else if (event === 'switchWeapon') {
+        } else if (ev === 'switchWeapon') {
           p.weaponSlot = data === 'secondary' ? 'secondary' : 'primary';
-        } else if (event === 'reloadWeapon') {
+        } else if (ev === 'reloadWeapon') {
           const w = hero[p.weaponSlot];
           if (now < p.reloadingUntil || p.ammo[p.weaponSlot] === w.mag) return;
           p.reloadingUntil = now + w.reloadMs;
           setTimeout(() => { if (this.room && this.room.players[pid]) this.room.players[pid].ammo[p.weaponSlot] = w.mag; }, w.reloadMs);
-        } else if (event === 'toggleDoor') {
+        } else if (ev === 'toggleDoor') {
           this.room.doors.forEach((d) => {
             if (Math.hypot(p.x - d.x, p.z - d.z) <= 8.5) {
               d.open = !d.open;
-              this.emitNoise(p, 30, 'door');
+              this.emitNoise(p, 28, 'door');
               this.broadcast('doorState', this.room.doors);
             }
           });
-        } else if (event === 'useAbility') {
+        } else if (ev === 'useAbility') {
           if (data === 'defensive' && now >= p.defCdUntil) {
             p.defCdUntil = now + hero.defensive.cdMs;
             p.defActiveUntil = now + hero.defensive.durationMs;
             if (p.heroId === 'vex') {
-              p.x = Math.max(-28, Math.min(28, p.x - Math.sin(p.yaw) * 6.5));
-              p.z = Math.max(-28, Math.min(28, p.z - Math.cos(p.yaw) * 6.5));
+              const stepPos = slideMove(this.room.mapId, this.room.doors, this.room.deployables, p.x, p.y, p.z, -Math.sin(p.yaw) * 6.0, -Math.cos(p.yaw) * 6.0);
+              p.x = stepPos.x; p.z = stepPos.z;
               if (pid === this.id) { localPlayer.x = p.x; localPlayer.z = p.z; }
             } else if (p.heroId === 'cipher') {
-              this.room.deployables.push({ id: 'smk_' + now, type: 'smoke', x: p.x - Math.sin(p.yaw) * 7, y: p.y + 1.8, z: p.z - Math.cos(p.yaw) * 7, w: 9, h: 3.8, d: 3.5, expiresAt: now + 6000 });
+              this.room.deployables.push({ id: 'smk_' + now, type: 'smoke', x: p.x - Math.sin(p.yaw) * 6.5, y: p.y + 1.8, z: p.z - Math.cos(p.yaw) * 6.5, w: 8.5, h: 3.8, d: 3.0, expiresAt: now + 6000 });
             } else if (p.heroId === 'bastion') {
-              this.room.deployables.push({ id: 'bar_' + now, type: 'barrier', x: p.x - Math.sin(p.yaw) * 3.5, y: p.y + 1.2, z: p.z - Math.cos(p.yaw) * 3.5, w: 4.5, h: 2.5, d: 1.0, expiresAt: now + 7000 });
+              this.room.deployables.push({ id: 'bar_' + now, type: 'barrier', x: p.x - Math.sin(p.yaw) * 3.2, y: p.y + 1.1, z: p.z - Math.cos(p.yaw) * 3.2, w: 4.2, h: 2.2, d: 0.8, expiresAt: now + 7000 });
             } else if (p.heroId === 'volt') {
               p.ammo.primary = hero.primary.mag;
             }
@@ -615,10 +665,9 @@
             p.ultActiveUntil = now + hero.ultimate.durationMs;
             Object.values(this.room.players).forEach((t) => {
               if (t.id === p.id) return;
-              if (p.heroId === 'vex') t.revealedUntil = now + 6000;
+              if (p.heroId === 'vex' || p.heroId === 'cipher') t.revealedUntil = now + 6500;
               if (p.heroId === 'krosh') { p.armor = 50; t.slowedUntil = now + 3500; }
-              if (p.heroId === 'cipher') t.blackoutUntil = now + 8000;
-              if (p.heroId === 'bastion' && Math.hypot(t.x - p.x, t.z - p.z) <= 15) this.applyDmg(p, t, 45, 'Lockdown Array', false);
+              if (p.heroId === 'bastion' && Math.hypot(t.x - p.x, t.z - p.z) <= 16) this.applyDmg(p, t, 45, 'Lockdown Zap', false);
             });
             if (p.heroId === 'volt' && p.history.length > 0) {
               const snap = p.history[0];
@@ -626,14 +675,14 @@
               if (pid === this.id) { localPlayer.x = p.x; localPlayer.y = p.y; localPlayer.z = p.z; }
             }
           }
-        } else if (event === 'fireWeapon') {
+        } else if (ev === 'fireWeapon') {
           const w = hero[p.weaponSlot];
           if (now < p.reloadingUntil || p.ammo[p.weaponSlot] <= 0) return;
           p.ammo[p.weaponSlot]--;
           this.emitNoise(p, w.noiseRadius, 'gunfire');
           const pellets = w.pellets || 1;
           for (let i = 0; i < pellets; i++) {
-            const sp = p.stance === 'crouch' ? w.spread * 0.55 : w.spread;
+            const sp = data.spread;
             const rx = data.dir.x + (Math.random() - 0.5) * sp;
             const ry = data.dir.y + (Math.random() - 0.5) * sp;
             const rz = data.dir.z + (Math.random() - 0.5) * sp;
@@ -647,19 +696,10 @@
         const now = Date.now();
         if (type === 'footstep' && source.heroId === 'sable' && (now < source.ultActiveUntil || now < source.defActiveUntil)) return;
         const map = MAPS[this.room.mapId];
-        let mat = map.floorMat;
-        map.structures.forEach((s) => {
-          if ((s.walkable || s.ramp) && Math.abs(source.x - s.x) <= s.w / 2 && Math.abs(source.z - s.z) <= s.d / 2 && source.y >= s.y - 1.5) mat = s.mat;
-        });
+        const mat = getSurfaceAt(map, source.x, source.y, source.z);
         const eff = baseRadius * (SURFACE_MULT[mat] || 1.0);
-        Object.values(this.room.players).forEach((listener) => {
-          if (listener.id === source.id || listener.isBot) return;
-          const d = Math.hypot(listener.x - source.x, listener.z - source.z);
-          if (d <= eff) {
-            this.sendTo(listener.id, 'acousticPing', {
-              x: source.x, y: source.y, z: source.z, surface: mat, type, intensity: Math.max(0.25, 1 - d / eff)
-            });
-          }
+        this.broadcast('acousticPing', {
+          ownerId: source.id, x: source.x, y: source.y, z: source.z, surface: mat, type, radius: eff
         });
       }
 
@@ -682,39 +722,47 @@
 
       raycastShot(shooter, weapon, orig, dir, mult) {
         const map = MAPS[this.room.mapId];
-        let wallDist = Infinity;
+        let wallDist = 65;
         const blocks = [...map.structures, ...this.room.doors.filter((d) => !d.open), ...this.room.deployables.filter((d) => d.type === 'barrier')];
         blocks.forEach((b) => {
           const t = this.intersectAABB(orig, dir, b);
           if (t !== null && t < wallDist) wallDist = t;
         });
 
-        let hitTarget = null, hitDist = Infinity, head = false;
+        let hitTarget = null, hitDist = wallDist, head = false;
         Object.values(this.room.players).forEach((t) => {
           if (t.id === shooter.id) return;
-          const box = { x: t.x, y: t.y + 0.9, z: t.z, w: 1.0, h: 1.8, d: 1.0 };
+          const box = { x: t.x, y: t.y + 0.9, z: t.z, w: 0.95, h: 1.8, d: 0.95 };
           const d = this.intersectAABB(orig, dir, box);
           if (d !== null && d < hitDist) {
             hitDist = d; hitTarget = t;
-            head = (orig.y + dir.y * d) >= t.y + 1.4;
+            head = (orig.y + dir.y * d) >= t.y + 1.38;
           }
         });
 
+        const endPt = {
+          x: orig.x + dir.x * hitDist,
+          y: orig.y + dir.y * hitDist,
+          z: orig.z + dir.z * hitDist
+        };
+        this.broadcast('tracerFx', { start: orig, end: endPt, color: HEROES[shooter.heroId].color, hitPlayer: !!hitTarget });
+
         const now = Date.now();
-        if (hitTarget && (hitDist < wallDist || (weapon.pattern === 'wallbang' && hitDist < wallDist + 2.5))) {
+        if (hitTarget) {
           if (now < hitTarget.defActiveUntil && ['vex', 'krosh', 'volt'].includes(hitTarget.heroId)) {
             this.broadcast('hitMarker', { shooterId: shooter.id, blocked: true });
             return;
           }
-          const wb = hitDist >= wallDist ? 0.6 : 1.0;
-          const dmg = Math.round(weapon.dmg * (head ? weapon.headMult : 1.0) * mult * wb);
+          const dmg = Math.round(weapon.dmg * (head ? weapon.headMult : 1.0) * mult);
           this.applyDmg(shooter, hitTarget, dmg, weapon.name, head);
+        } else if (weapon.pattern === 'ricochet' && mult === 1.0 && wallDist < 60) {
+          this.raycastShot(shooter, weapon, endPt, { x: -dir.x, y: dir.y, z: -dir.z }, 1.3);
         }
       }
 
       applyDmg(attacker, victim, dmg, wepName, isHeadshot) {
-        attacker.ultCharge = Math.min(attacker.ultMax, attacker.ultCharge + dmg * 2.2);
-        victim.ultCharge = Math.min(victim.ultMax, victim.ultCharge + dmg * 1.2);
+        attacker.ultCharge = Math.min(attacker.ultMax, attacker.ultCharge + dmg * 2.4);
+        victim.ultCharge = Math.min(victim.ultMax, victim.ultCharge + dmg * 1.4);
         if (victim.armor > 0) {
           const abs = Math.min(victim.armor, dmg);
           victim.armor -= abs; dmg -= abs;
@@ -743,34 +791,59 @@
         }
       }
 
-      startServerLoops() {
+      startLoop() {
         setInterval(() => {
           if (!this.room || this.room.over) return;
           const now = Date.now();
           this.room.deployables = this.room.deployables.filter((d) => d.expiresAt > now);
 
           Object.values(this.room.players).forEach((p) => {
-            p.ultCharge = Math.min(p.ultMax, p.ultCharge + 0.65);
+            p.ultCharge = Math.min(p.ultMax, p.ultCharge + 0.7);
             if (p.isBot) {
               const target = this.room.players[this.id];
               if (!target) return;
               const dx = target.x - p.x, dz = target.z - p.z;
               const dist = Math.hypot(dx, dz) || 1;
               p.yaw = Math.atan2(-dx, -dz);
-              if (dist > 13) {
-                p.x += (dx / dist) * 0.21;
-                p.z += (dz / dist) * 0.21;
-                if (Math.random() < 0.09) this.emitNoise(p, 15, 'footstep');
-              } else {
-                const st = Math.sin(now * 0.004) * 0.16;
-                p.x += (-dz / dist) * st;
-                p.z += (dx / dist) * st;
+
+              // Check if AI has clear line of sight to player
+              const eye = { x: p.x, y: p.y + 1.5, z: p.z };
+              const aimDir = { x: dx / dist, y: (target.y - p.y) / dist, z: dz / dist };
+              let wallBlocked = false;
+              const map = MAPS[this.room.mapId];
+              for (const b of [...map.structures, ...this.room.doors.filter((d) => !d.open)]) {
+                const t = this.intersectAABB(eye, aimDir, b);
+                if (t !== null && t < dist) { wallBlocked = true; break; }
               }
+
+              // Move around obstacles using sliding collision
+              let moveX = (dx / dist) * 0.19;
+              let moveZ = (dz / dist) * 0.19;
+              if (wallBlocked || dist < 11) {
+                p.patrolAngle += 0.03;
+                moveX = Math.cos(p.patrolAngle) * 0.18 + (dx / dist) * 0.08;
+                moveZ = Math.sin(p.patrolAngle) * 0.18 + (dz / dist) * 0.08;
+              }
+              const nextPos = slideMove(this.room.mapId, this.room.doors, this.room.deployables, p.x, p.y, p.z, moveX, moveZ);
+              p.x = nextPos.x; p.z = nextPos.z;
+              p.y = getFloorElevation(map, p.x, p.z);
+
+              if (now - p.lastStepAt > 420) {
+                p.lastStepAt = now;
+                this.emitNoise(p, 16, 'footstep');
+              }
+
+              // Only fire when AI has line of sight!
               const h = HEROES[p.heroId];
-              if (now - p.lastShotAt > Math.max(480, h.primary.fireRateMs * 1.4)) {
+              if (!wallBlocked && now - p.lastShotAt > Math.max(550, h.primary.fireRateMs * 1.5)) {
                 p.lastShotAt = now;
                 this.emitNoise(p, h.primary.noiseRadius, 'gunfire');
-                this.raycastShot(p, h.primary, { x: p.x, y: p.y + 1.5, z: p.z }, { x: dx / dist, y: (target.y - p.y) / dist, z: dz / dist }, 0.7);
+                const botSpread = 0.045;
+                const rx = aimDir.x + (Math.random() - 0.5) * botSpread;
+                const ry = aimDir.y + (Math.random() - 0.5) * botSpread;
+                const rz = aimDir.z + (Math.random() - 0.5) * botSpread;
+                const l = Math.hypot(rx, ry, rz) || 1;
+                this.raycastShot(p, h.primary, eye, { x: rx / l, y: ry / l, z: rz / l }, 0.65);
               }
             }
           });
@@ -784,17 +857,66 @@
           if (this.room.timeRemaining <= 0) {
             this.room.over = true;
             const sorted = Object.values(this.room.players).sort((a, b) => b.kills - a.kills);
-            this.broadcast('matchOver', { winner: sorted[0].name, reason: 'Time Limit Reached' });
+            this.broadcast('matchOver', { winner: sorted[0].name, reason: 'Time Expired' });
           }
         }, 1000);
       }
     }
 
-    const socket = new HybridSocketAdapter();
+    // ========================================================================
+    // 4. REAL SLIDING WALL COLLISION & ELEVATION PHYSICS HELPERS
+    // ========================================================================
+    function getFloorElevation(map, x, z) {
+      let targetFloor = 0;
+      map.structures.forEach((s) => {
+        if (Math.abs(x - s.x) <= s.w / 2 + 0.3 && Math.abs(z - s.z) <= s.d / 2 + 0.3) {
+          if (s.walkable) targetFloor = Math.max(targetFloor, s.y + s.h / 2);
+          else if (s.ramp) targetFloor = Math.max(targetFloor, 2.0);
+        }
+      });
+      return targetFloor;
+    }
+
+    function getSurfaceAt(map, x, y, z) {
+      for (const s of map.structures) {
+        if ((s.walkable || s.ramp) && Math.abs(x - s.x) <= s.w / 2 && Math.abs(z - s.z) <= s.d / 2 && y >= s.y - 1.5) {
+          return s.mat;
+        }
+      }
+      return map.floorMat;
+    }
+
+    function collidesAt(mapId, doors, deployables, x, y, z) {
+      const r = 0.45; // Player physical radius
+      if (Math.abs(x) > 28.2 || Math.abs(z) > 28.2) return true;
+      const map = MAPS[mapId];
+      const obstacles = [
+        ...map.structures.filter((s) => !s.walkable && !s.ramp),
+        ...(doors || []).filter((d) => !d.open),
+        ...(deployables || []).filter((d) => d.type === 'barrier')
+      ];
+      for (const b of obstacles) {
+        if (y + 1.6 > b.y - b.h / 2 && y < b.y + b.h / 2) {
+          if (x + r > b.x - b.w / 2 && x - r < b.x + b.w / 2 &&
+              z + r > b.z - b.d / 2 && z - r < b.z + b.d / 2) {
+            return true;
+          }
+        }
+      }
+      return false;
+    }
+
+    function slideMove(mapId, doors, deployables, x, y, z, dx, dz) {
+      let nx = x, nz = z;
+      if (!collidesAt(mapId, doors, deployables, x + dx, y, z)) nx = x + dx;
+      if (!collidesAt(mapId, doors, deployables, nx, y, z + dz)) nz = z + dz;
+      return { x: nx, z: nz };
+    }
 
     // ========================================================================
-    // 3. THREE.JS 3D CLIENT & CROSS-PLATFORM INPUT (PC + iPAD)
+    // 5. THREE.JS SCENE, 3D VIEWMODEL GUN & REAL SPRING RECOIL ENGINE
     // ========================================================================
+    const socket = new HybridSocketAdapter();
     let catalog = { heroes: HEROES, maps: MAPS };
     let selectedHero = 'vex';
     let selectedMap = 'foundry';
@@ -806,7 +928,8 @@
     let doorMeshes = {};
     let opponentMeshes = {};
     let deployableMeshes = {};
-    let acousticRings = [];
+    let activeTracers = [];
+    let acousticPings = [];
 
     const canvas = document.getElementById('gameCanvas');
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -815,19 +938,37 @@
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 150);
 
+    // First-Person 3D Weapon Viewmodel Rig attached to Camera
+    const gunRig = new THREE.Group();
+    const gunBody = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.14, 0.55), new THREE.MeshLambertMaterial({ color: 0x38bdf8 }));
+    const gunBarrel = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 0.4), new THREE.MeshLambertMaterial({ color: 0x94a3b8 }));
+    gunBarrel.position.set(0, 0.04, -0.35);
+    const muzzleFlash = new THREE.Mesh(new THREE.SphereGeometry(0.09, 8, 8), new THREE.MeshBasicMaterial({ color: 0xfacc15 }));
+    muzzleFlash.position.set(0, 0.04, -0.58);
+    muzzleFlash.visible = false;
+    gunRig.add(gunBody, gunBarrel, muzzleFlash);
+    gunRig.position.set(0.26, -0.24, -0.45);
+    camera.add(gunRig);
+
     window.addEventListener('resize', () => {
       camera.aspect = window.innerWidth / window.innerHeight;
       camera.updateProjectionMatrix();
       renderer.setSize(window.innerWidth, window.innerHeight);
     });
 
+    // Player Physics State (Velocity, Acceleration, Spring Recoil)
     const localPlayer = {
-      x: 0, y: 0, z: 0, vy: 0, yaw: 0, pitch: 0, recoilOffset: 0,
+      x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0,
+      yaw: 0, pitch: 0,
+      recoilPitch: 0, recoilPitchVel: 0,
+      recoilYaw: 0, gunKickZ: 0,
+      currentSpread: 0.005,
       stance: 'stand', crouchToggle: false, grounded: true,
       keys: {}, firing: false, lastFireTime: 0,
-      joyX: 0, joyY: 0, joyMag: 0
+      joyX: 0, joyY: 0, joyMag: 0, walkCycle: 0
     };
 
+    // Build Pre-Match Lobby
     socket.on('initCatalog', (data) => {
       catalog = data;
       const heroGrid = document.getElementById('heroGrid');
@@ -861,22 +1002,18 @@
       });
     });
 
-    function syncTouchHUDVisibility() {
+    function syncTouchHUD() {
       document.getElementById('touchControls').style.display = showTouchHUD ? 'block' : 'none';
-      document.getElementById('touchToggleBtn').textContent = `TOUCH HUD: ${showTouchHUD ? 'ON' : 'OFF'}`;
+      document.getElementById('touchToggleBtn').textContent = `TOUCH: ${showTouchHUD ? 'ON' : 'OFF'}`;
     }
-
-    document.getElementById('touchToggleBtn').onclick = (e) => {
-      e.stopPropagation();
-      showTouchHUD = !showTouchHUD;
-      syncTouchHUDVisibility();
-    };
+    document.getElementById('touchToggleBtn').onclick = (e) => { e.stopPropagation(); showTouchHUD = !showTouchHUD; syncTouchHUD(); };
     document.getElementById('lobbyReturnBtn').onclick = () => location.reload();
 
     document.getElementById('deployBtn').onclick = () => {
+      sfx.init();
       document.getElementById('lobby').style.display = 'none';
       document.getElementById('hud').style.display = 'block';
-      syncTouchHUDVisibility();
+      syncTouchHUD();
       if (!showTouchHUD && canvas.requestPointerLock) canvas.requestPointerLock();
 
       socket.emit('joinMatch', {
@@ -889,30 +1026,53 @@
       });
     };
 
+    // Build 3D Arena with Tactical Grid & Outlined Geometry
     function buildArenaScene(mapId, doors) {
       while (scene.children.length > 0) scene.remove(scene.children[0]);
+      scene.add(camera);
       doorMeshes = {}; opponentMeshes = {}; deployableMeshes = {};
+
       const map = catalog.maps[mapId];
       scene.background = new THREE.Color(map.fogColor);
-      scene.fog = new THREE.FogExp2(map.fogColor, 0.018);
+      scene.fog = new THREE.FogExp2(map.fogColor, 0.014);
 
-      scene.add(new THREE.AmbientLight(0xffffff, 0.7));
-      const dir = new THREE.DirectionalLight(0xffffff, 0.85);
-      dir.position.set(20, 40, 15);
-      scene.add(dir);
+      scene.add(new THREE.AmbientLight(0xffffff, 0.72));
+      const sun = new THREE.DirectionalLight(0xffffff, 0.85);
+      sun.position.set(25, 45, 20);
+      scene.add(sun);
 
+      // Floor + High-Contrast Tactical Grid (for clear spatial depth & speed reference)
       const floor = new THREE.Mesh(new THREE.PlaneGeometry(60, 60), new THREE.MeshLambertMaterial({ color: map.ambientColor }));
       floor.rotation.x = -Math.PI / 2;
       scene.add(floor);
+      const grid = new THREE.GridHelper(60, 30, 0x38bdf8, 0x334155);
+      grid.position.y = 0.02;
+      scene.add(grid);
 
+      // Outer Arena Perimeter Walls
+      const wallSpecs = [
+        [0, 4, -29, 58, 8, 1.5], [0, 4, 29, 58, 8, 1.5],
+        [-29, 4, 0, 1.5, 8, 58], [29, 4, 0, 1.5, 8, 58]
+      ];
+      wallSpecs.forEach(([x, y, z, w, h, d]) => {
+        const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), new THREE.MeshLambertMaterial({ color: 0x1e293b }));
+        m.position.set(x, y, z);
+        scene.add(m);
+      });
+
+      // Map Structures with Edge Outlines so corridors & ramps are unmistakable
       map.structures.forEach((s) => {
-        const mesh = new THREE.Mesh(new THREE.BoxGeometry(s.w, s.h, s.d), new THREE.MeshLambertMaterial({ color: s.color }));
+        const geo = new THREE.BoxGeometry(s.w, s.h, s.d);
+        const mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color: s.color }));
         mesh.position.set(s.x, s.y, s.z);
+        const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({ color: s.ramp ? 0x38bdf8 : 0x0f172a }));
+        mesh.add(edges);
         scene.add(mesh);
       });
 
       doors.forEach((d) => {
-        const mesh = new THREE.Mesh(new THREE.BoxGeometry(d.w, d.h, d.d), new THREE.MeshLambertMaterial({ color: 0xeab308 }));
+        const geo = new THREE.BoxGeometry(d.w, d.h, d.d);
+        const mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color: 0xeab308 }));
         mesh.position.set(d.x, d.open ? d.y + 4.4 : d.y, d.z);
         scene.add(mesh);
         doorMeshes[d.id] = mesh;
@@ -925,6 +1085,7 @@
       const me = state.players[socket.id];
       if (me) {
         localPlayer.x = me.x; localPlayer.y = me.y; localPlayer.z = me.z; localPlayer.yaw = me.yaw;
+        gunBody.material.color.setHex(HEROES[me.heroId].color);
       }
       document.getElementById('hudMapName').textContent = catalog.maps[state.mapId].name.toUpperCase();
     });
@@ -935,9 +1096,27 @@
       doors.forEach((d) => { if (doorMeshes[d.id]) doorMeshes[d.id].position.y = d.open ? d.y + 4.4 : d.y; });
     });
 
+    // Spawn 3D Bullet Tracer & Impact Spark
+    socket.on('tracerFx', ({ start, end, color, hitPlayer }) => {
+      const pts = [new THREE.Vector3(start.x, start.y - 0.1, start.z), new THREE.Vector3(end.x, end.y, end.z)];
+      const lineGeo = new THREE.BufferGeometry().setFromPoints(pts);
+      const lineMat = new THREE.LineBasicMaterial({ color: hitPlayer ? 0xfacc15 : color });
+      const line = new THREE.Line(lineGeo, lineMat);
+      scene.add(line);
+
+      const spark = new THREE.Mesh(
+        new THREE.SphereGeometry(hitPlayer ? 0.18 : 0.1, 6, 6),
+        new THREE.MeshBasicMaterial({ color: hitPlayer ? 0xf43f5e : 0xfacc15 })
+      );
+      spark.position.set(end.x, end.y, end.z);
+      scene.add(spark);
+      activeTracers.push({ line, spark, expires: Date.now() + 140 });
+    });
+
     socket.on('worldTick', ({ players, deployables }) => {
       if (!roomState) return;
       roomState.players = players;
+      roomState.deployables = deployables;
       const now = Date.now();
       const me = players[socket.id];
       if (me) updateHUD(me, players, now);
@@ -946,11 +1125,15 @@
         if (p.id === socket.id) return;
         if (!opponentMeshes[p.id]) {
           const group = new THREE.Group();
-          const body = new THREE.Mesh(new THREE.BoxGeometry(0.9, 1.4, 0.9), new THREE.MeshLambertMaterial({ color: catalog.heroes[p.heroId].color }));
-          body.position.y = 0.7;
-          const head = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.45, 0.5), new THREE.MeshLambertMaterial({ color: 0xf8fafc }));
-          head.position.y = 1.62;
-          group.add(body, head);
+          const body = new THREE.Mesh(new THREE.BoxGeometry(0.85, 1.35, 0.6), new THREE.MeshLambertMaterial({ color: catalog.heroes[p.heroId].color }));
+          body.position.y = 0.68;
+          const head = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.46, 0.46), new THREE.MeshLambertMaterial({ color: 0xf8fafc }));
+          head.position.y = 1.6;
+          const visor = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.14, 0.1), new THREE.MeshBasicMaterial({ color: 0xf43f5e }));
+          visor.position.set(0, 1.62, -0.22);
+          const gun = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.14, 0.65), new THREE.MeshLambertMaterial({ color: 0x1e293b }));
+          gun.position.set(0.32, 1.05, -0.35);
+          group.add(body, head, visor, gun);
           scene.add(group);
           opponentMeshes[p.id] = { group, body };
         }
@@ -980,15 +1163,20 @@
       });
     });
 
-    socket.on('acousticPing', (ping) => acousticRings.push({ ...ping, createdAt: Date.now() }));
+    socket.on('acousticPing', (ping) => {
+      if (ping.ownerId !== socket.id) {
+        acousticPings.push({ ...ping, createdAt: Date.now() });
+      }
+    });
 
     socket.on('hitMarker', ({ shooterId, isHeadshot, blocked }) => {
       if (shooterId === socket.id) {
+        sfx.playHit(isHeadshot);
         const el = document.getElementById('hitIndicator');
-        el.textContent = blocked ? '🛡️' : (isHeadshot ? '⌖' : '✕');
+        el.textContent = blocked ? '🛡️ BLOCKED' : (isHeadshot ? '⌖ HEADSHOT!' : '✕');
         el.style.color = blocked ? '#38bdf8' : (isHeadshot ? '#facc15' : '#f43f5e');
         el.style.opacity = '1';
-        setTimeout(() => { el.style.opacity = '0'; }, 140);
+        setTimeout(() => { el.style.opacity = '0'; }, 160);
       }
     });
 
@@ -1020,8 +1208,7 @@
       const defRem = Math.max(0, Math.ceil((me.defCdUntil - now) / 1000));
       document.getElementById('hudDefStatus').textContent = `[E] ${hero.defensive.name}: ${defRem > 0 ? defRem + 's' : 'READY'}`;
       const ultPct = Math.min(100, Math.floor((me.ultCharge / me.ultMax) * 100));
-      document.getElementById('hudUltStatus').textContent = `[Q] ${hero.ultimate.name}: ${ultPct >= 100 ? 'READY' : ultPct + '%'}`;
-      document.getElementById('blackoutBanner').style.display = now < me.blackoutUntil ? 'block' : 'none';
+      document.getElementById('hudUltStatus').textContent = `[Q] ${hero.ultimate.name}: ${ultPct >= 100 ? 'READY!' : ultPct + '%'}`;
 
       const opp = Object.values(players).find((p) => p.id !== socket.id);
       if (roomState.mode === 'stock') {
@@ -1031,11 +1218,14 @@
         const s = String(roomState.timeRemaining % 60).padStart(2, '0');
         document.getElementById('hudModeStat').textContent = `CLOCK: ${m}:${s}`;
       }
-      document.getElementById('hudScore').textContent = `ELIMS: ${me.kills} - ${opp ? opp.kills : 0}`;
+      document.getElementById('hudScore').textContent = `SCORE: ${me.kills} - ${opp ? opp.kills : 0}`;
     }
 
-    // Desktop Input
+    // ========================================================================
+    // 6. INPUT HANDLERS (PC MOUSE/KB + iPAD MULTI-TOUCH)
+    // ========================================================================
     window.addEventListener('keydown', (e) => {
+      sfx.init();
       const k = e.key.toLowerCase();
       localPlayer.keys[k] = true;
       if (k === '1') socket.emit('switchWeapon', 'primary');
@@ -1044,7 +1234,7 @@
       if (k === 'e') socket.emit('useAbility', 'defensive');
       if (k === 'q') socket.emit('useAbility', 'ultimate');
       if (k === 'f') socket.emit('toggleDoor');
-      if (k === ' ' && localPlayer.grounded) { localPlayer.vy = 0.16; localPlayer.grounded = false; }
+      if (k === ' ' && localPlayer.grounded) { localPlayer.vy = 0.17; localPlayer.grounded = false; }
     });
     window.addEventListener('keyup', (e) => { localPlayer.keys[e.key.toLowerCase()] = false; });
 
@@ -1055,13 +1245,14 @@
     });
 
     canvas.addEventListener('mousedown', (e) => {
+      sfx.init();
       if (showTouchHUD) return;
       if (document.pointerLockElement !== canvas && canvas.requestPointerLock) { canvas.requestPointerLock(); return; }
       if (e.button === 0) { localPlayer.firing = true; attemptFire(); }
     });
     window.addEventListener('mouseup', () => { if (!showTouchHUD) localPlayer.firing = false; });
 
-    // iPad Multi-Touch Twin-Stick Input
+    // iPad Touch Controls
     const joystickZone = document.getElementById('joystickZone');
     const joystickKnob = document.getElementById('joystickKnob');
     let joyTouchId = null;
@@ -1080,23 +1271,17 @@
     }
 
     joystickZone.addEventListener('touchstart', (e) => {
-      e.preventDefault();
-      const t = e.changedTouches[0];
-      joyTouchId = t.identifier;
-      updateJoystick(t.clientX, t.clientY);
+      sfx.init(); e.preventDefault();
+      const t = e.changedTouches[0]; joyTouchId = t.identifier; updateJoystick(t.clientX, t.clientY);
     }, { passive: false });
-
     joystickZone.addEventListener('touchmove', (e) => {
       e.preventDefault();
       for (const t of e.changedTouches) if (t.identifier === joyTouchId) updateJoystick(t.clientX, t.clientY);
     }, { passive: false });
-
     function endJoy(e) {
-      for (const t of e.changedTouches) {
-        if (t.identifier === joyTouchId) {
-          joyTouchId = null; localPlayer.joyX = 0; localPlayer.joyY = 0; localPlayer.joyMag = 0;
-          joystickKnob.style.transform = 'translate(-50%, -50%)';
-        }
+      for (const t of e.changedTouches) if (t.identifier === joyTouchId) {
+        joyTouchId = null; localPlayer.joyX = 0; localPlayer.joyY = 0; localPlayer.joyMag = 0;
+        joystickKnob.style.transform = 'translate(-50%, -50%)';
       }
     }
     joystickZone.addEventListener('touchend', endJoy);
@@ -1104,31 +1289,23 @@
 
     const lookZone = document.getElementById('lookZone');
     let lookTouchId = null, lastLX = 0, lastLY = 0;
-
     lookZone.addEventListener('touchstart', (e) => {
-      e.preventDefault();
-      const t = e.changedTouches[0];
-      lookTouchId = t.identifier; lastLX = t.clientX; lastLY = t.clientY;
+      sfx.init(); e.preventDefault();
+      const t = e.changedTouches[0]; lookTouchId = t.identifier; lastLX = t.clientX; lastLY = t.clientY;
     }, { passive: false });
-
     lookZone.addEventListener('touchmove', (e) => {
       e.preventDefault();
-      for (const t of e.changedTouches) {
-        if (t.identifier === lookTouchId) {
-          localPlayer.yaw -= (t.clientX - lastLX) * 0.0045;
-          localPlayer.pitch = Math.max(-1.4, Math.min(1.4, localPlayer.pitch - (t.clientY - lastLY) * 0.0045));
-          lastLX = t.clientX; lastLY = t.clientY;
-        }
+      for (const t of e.changedTouches) if (t.identifier === lookTouchId) {
+        localPlayer.yaw -= (t.clientX - lastLX) * 0.0045;
+        localPlayer.pitch = Math.max(-1.4, Math.min(1.4, localPlayer.pitch - (t.clientY - lastLY) * 0.0045));
+        lastLX = t.clientX; lastLY = t.clientY;
       }
     }, { passive: false });
-
-    lookZone.addEventListener('touchend', (e) => {
-      for (const t of e.changedTouches) if (t.identifier === lookTouchId) lookTouchId = null;
-    });
+    lookZone.addEventListener('touchend', (e) => { for (const t of e.changedTouches) if (t.identifier === lookTouchId) lookTouchId = null; });
 
     function bindBtn(id, downFn, upFn) {
       const b = document.getElementById(id);
-      b.addEventListener('touchstart', (e) => { e.preventDefault(); e.stopPropagation(); downFn(); }, { passive: false });
+      b.addEventListener('touchstart', (e) => { sfx.init(); e.preventDefault(); e.stopPropagation(); downFn(); }, { passive: false });
       if (upFn) {
         b.addEventListener('touchend', (e) => { e.preventDefault(); e.stopPropagation(); upFn(); }, { passive: false });
         b.addEventListener('touchcancel', (e) => { e.preventDefault(); e.stopPropagation(); upFn(); }, { passive: false });
@@ -1139,7 +1316,7 @@
       localPlayer.crouchToggle = !localPlayer.crouchToggle;
       document.getElementById('btnCrouch').classList.toggle('active-toggle', localPlayer.crouchToggle);
     });
-    bindBtn('btnJump', () => { if (localPlayer.grounded) { localPlayer.vy = 0.16; localPlayer.grounded = false; } });
+    bindBtn('btnJump', () => { if (localPlayer.grounded) { localPlayer.vy = 0.17; localPlayer.grounded = false; } });
     bindBtn('btnReload', () => socket.emit('reloadWeapon'));
     bindBtn('btnSwap', () => {
       if (!roomState || !roomState.players[socket.id]) return;
@@ -1150,54 +1327,88 @@
     bindBtn('btnUlt', () => socket.emit('useAbility', 'ultimate'));
     bindBtn('btnDoor', () => socket.emit('toggleDoor'));
 
+    // ========================================================================
+    // 7. REAL BALLISTICS, VELOCITY INACCURACY & SPRING RECOIL IMPULSE
+    // ========================================================================
     function attemptFire() {
       if (!roomState || !roomState.players[socket.id]) return;
       const me = roomState.players[socket.id];
       const hero = catalog.heroes[me.heroId];
       const w = hero[me.weaponSlot];
       const now = Date.now();
-      if (now - localPlayer.lastFireTime < w.fireRateMs || now < me.reloadingUntil || me.ammo[me.weaponSlot] <= 0) return;
+      if (now - localPlayer.lastFireTime < w.fireRateMs || now < me.reloadingUntil) return;
+      if (me.ammo[me.weaponSlot] <= 0) {
+        socket.emit('reloadWeapon');
+        return;
+      }
       localPlayer.lastFireTime = now;
 
       const sendShot = () => {
-        const dir = new THREE.Vector3(0, 0, -1).applyEuler(new THREE.Euler(localPlayer.pitch + localPlayer.recoilOffset, localPlayer.yaw, 0, 'YXZ'));
+        sfx.playShot(w.pattern.includes('silenced'), w.pattern === 'shotgun' || w.pattern === 'revolver');
+        muzzleFlash.visible = true;
+        setTimeout(() => { muzzleFlash.visible = false; }, 45);
+
+        const dir = new THREE.Vector3(0, 0, -1).applyEuler(
+          new THREE.Euler(localPlayer.pitch + localPlayer.recoilPitch, localPlayer.yaw + localPlayer.recoilYaw, 0, 'YXZ')
+        );
         socket.emit('fireWeapon', {
-          origin: { x: localPlayer.x, y: localPlayer.y + (localPlayer.stance === 'crouch' ? 1.0 : 1.55), z: localPlayer.z },
-          dir: { x: dir.x, y: dir.y, z: dir.z }
+          origin: { x: localPlayer.x, y: localPlayer.y + (localPlayer.stance === 'crouch' ? 1.05 : 1.55), z: localPlayer.z },
+          dir: { x: dir.x, y: dir.y, z: dir.z },
+          spread: localPlayer.currentSpread
         });
-        localPlayer.recoilOffset = Math.min(0.25, localPlayer.recoilOffset + w.recoilPitch);
-        localPlayer.yaw += (Math.random() - 0.5) * w.recoilYaw;
+
+        // Apply physical Spring-Damper Recoil Kick to Camera & 3D Viewmodel
+        const crouchMult = localPlayer.stance === 'crouch' ? 0.65 : 1.0;
+        localPlayer.recoilPitchVel += w.recoilPitch * 0.48 * crouchMult;
+        localPlayer.recoilPitch = Math.min(0.32, localPlayer.recoilPitch + w.recoilPitch * 0.55 * crouchMult);
+        localPlayer.recoilYaw += (Math.random() - 0.5) * w.recoilYaw * 2.2 * crouchMult;
+        localPlayer.gunKickZ = 0.14;
       };
-      if (w.pattern === 'burst') { sendShot(); setTimeout(sendShot, 55); setTimeout(sendShot, 110); }
-      else sendShot();
+
+      if (w.pattern === 'burst') {
+        sendShot(); setTimeout(sendShot, 60); setTimeout(sendShot, 120);
+      } else {
+        sendShot();
+      }
     }
 
-    const compassCtx = document.getElementById('acousticCompass').getContext('2d');
+    // ========================================================================
+    // 8. MAIN PHYSICS, MINIMAP RADAR & TACTICAL COACH LOOP
+    // ========================================================================
+    const minimapCtx = document.getElementById('minimapCanvas').getContext('2d');
+    let lastLocalStepSound = 0;
+
     function animate() {
       requestAnimationFrame(animate);
       if (!roomState || !roomState.players[socket.id]) return;
+      const now = Date.now();
       const me = roomState.players[socket.id];
       const hero = catalog.heroes[me.heroId];
+      const map = catalog.maps[roomState.mapId];
 
+      // 1. Stance & Surface Noise Calculation
       const isCrouching = localPlayer.keys['c'] || localPlayer.keys['control'] || localPlayer.crouchToggle;
       const isTouchWalk = localPlayer.joyMag > 0.05 && localPlayer.joyMag < 0.55;
+      const surface = getSurfaceAt(map, localPlayer.x, localPlayer.y, localPlayer.z);
+      document.getElementById('hudSurfaceText').textContent = `Surface: ${surface.toUpperCase()} (${SURFACE_MULT[surface]}x noise)`;
 
       if (isCrouching) {
         localPlayer.stance = 'crouch';
-        document.getElementById('hudStance').textContent = 'CROUCH (0m Silent)';
+        document.getElementById('hudStance').textContent = 'CROUCH (SILENT)';
       } else if (localPlayer.keys['shift'] || isTouchWalk) {
         localPlayer.stance = 'walk';
-        document.getElementById('hudStance').textContent = 'WALK (4m Quiet)';
+        document.getElementById('hudStance').textContent = 'WALK (QUIET)';
       } else {
         localPlayer.stance = 'stand';
-        document.getElementById('hudStance').textContent = 'SPRINT (18m Noise)';
+        document.getElementById('hudStance').textContent = 'SPRINT (LOUD)';
       }
 
-      let spd = hero.speed * 0.016;
-      if (localPlayer.stance === 'walk') spd *= 0.52;
-      if (localPlayer.stance === 'crouch') spd *= 0.38;
-      if (Date.now() < me.slowedUntil) spd *= 0.65;
-      if (me.heroId === 'sable' && Date.now() < me.ultActiveUntil) spd *= 1.25;
+      // 2. Acceleration, Friction & Sliding Wall Collision Physics
+      let maxSpd = hero.speed * 0.017;
+      if (localPlayer.stance === 'walk') maxSpd *= 0.52;
+      if (localPlayer.stance === 'crouch') maxSpd *= 0.4;
+      if (now < me.slowedUntil) maxSpd *= 0.65;
+      if (me.heroId === 'sable' && now < me.ultActiveUntil) maxSpd *= 1.25;
 
       let fwd = localPlayer.joyY, str = localPlayer.joyX;
       if (localPlayer.keys['w']) fwd = 1;
@@ -1205,61 +1416,196 @@
       if (localPlayer.keys['a']) str = -1;
       if (localPlayer.keys['d']) str = 1;
 
-      if (Math.abs(fwd) > 0.02 || Math.abs(str) > 0.02) {
-        const a = localPlayer.yaw;
-        const nx = localPlayer.x + (-Math.sin(a) * fwd + Math.cos(a) * str) * spd;
-        const nz = localPlayer.z + (-Math.cos(a) * fwd - Math.sin(a) * str) * spd;
-        localPlayer.x = Math.max(-28.5, Math.min(28.5, nx));
-        localPlayer.z = Math.max(-28.5, Math.min(28.5, nz));
+      const inputLen = Math.hypot(fwd, str);
+      if (inputLen > 1) { fwd /= inputLen; str /= inputLen; }
+
+      const targetVx = (-Math.sin(localPlayer.yaw) * fwd + Math.cos(localPlayer.yaw) * str) * maxSpd;
+      const targetVz = (-Math.cos(localPlayer.yaw) * fwd - Math.sin(localPlayer.yaw) * str) * maxSpd;
+
+      const accel = localPlayer.grounded ? 0.25 : 0.08;
+      localPlayer.vx += (targetVx - localPlayer.vx) * accel;
+      localPlayer.vz += (targetVz - localPlayer.vz) * accel;
+
+      const moveSpeed = Math.hypot(localPlayer.vx, localPlayer.vz);
+      if (moveSpeed > 0.002) {
+        const nextPos = slideMove(roomState.mapId, roomState.doors, roomState.deployables, localPlayer.x, localPlayer.y, localPlayer.z, localPlayer.vx, localPlayer.vz);
+        localPlayer.x = nextPos.x;
+        localPlayer.z = nextPos.z;
+        localPlayer.walkCycle += moveSpeed * 1.8;
+
+        if (localPlayer.grounded && localPlayer.stance !== 'crouch' && now - lastLocalStepSound > (localPlayer.stance === 'walk' ? 480 : 290)) {
+          lastLocalStepSound = now;
+          sfx.playStep(surface);
+        }
       }
 
-      const map = catalog.maps[roomState.mapId];
-      let targetFloor = 0;
-      map.structures.forEach((s) => {
-        if ((s.walkable || s.ramp) && Math.abs(localPlayer.x - s.x) <= s.w / 2 && Math.abs(localPlayer.z - s.z) <= s.d / 2) {
-          targetFloor = Math.max(targetFloor, s.ramp ? 2.0 : s.y + s.h / 2);
-        }
+      // 3. Vertical Gravity & Smooth Ramp/Catwalk Climbing
+      const floorY = getFloorElevation(map, localPlayer.x, localPlayer.z);
+      localPlayer.y += localPlayer.vy;
+      if (localPlayer.y > floorY) {
+        localPlayer.vy -= 0.0085; // Gravity
+      } else {
+        localPlayer.y += (floorY - localPlayer.y) * 0.35; // Smooth step up ramps
+        if (Math.abs(localPlayer.y - floorY) < 0.05) localPlayer.y = floorY;
+        localPlayer.vy = 0;
+        localPlayer.grounded = true;
+      }
+
+      // 4. Hooke's Law Spring-Damper Recoil & Velocity Spread Calculation
+      const w = hero[me.weaponSlot];
+      localPlayer.recoilPitch += localPlayer.recoilPitchVel;
+      localPlayer.recoilPitchVel -= localPlayer.recoilPitch * 0.18; // Spring stiffness k
+      localPlayer.recoilPitchVel *= 0.72; // Damper c
+      localPlayer.recoilPitch *= 0.88;
+      localPlayer.recoilYaw *= 0.85;
+      localPlayer.gunKickZ *= 0.82;
+
+      const speedRatio = Math.min(1.5, moveSpeed / 0.12);
+      const airPenalty = localPlayer.grounded ? 0 : 0.06;
+      const crouchBonus = localPlayer.stance === 'crouch' ? 0.5 : 1.0;
+      localPlayer.currentSpread = (w.baseSpread + w.moveSpread * speedRatio + airPenalty + localPlayer.recoilPitch * 0.25) * crouchBonus;
+
+      // Update Dynamic Crosshair Gap based on real spread
+      const gapPx = Math.round(5 + localPlayer.currentSpread * 380);
+      document.getElementById('chTop').style.top = `${-gapPx - 8}px`;
+      document.getElementById('chBottom').style.top = `${gapPx}px`;
+      document.getElementById('chLeft').style.left = `${-gapPx - 8}px`;
+      document.getElementById('chRight').style.left = `${gapPx}px`;
+
+      // Animate 3D First-Person Gun Viewmodel (Bob, Recoil Kick, Reload Tilt)
+      const isReloading = now < me.reloadingUntil;
+      gunRig.position.x = 0.26 + Math.cos(localPlayer.walkCycle) * 0.012 * speedRatio;
+      gunRig.position.y = (isReloading ? -0.38 : -0.24) + Math.abs(Math.sin(localPlayer.walkCycle)) * 0.012 * speedRatio;
+      gunRig.position.z = -0.45 + localPlayer.gunKickZ;
+      gunRig.rotation.x = (isReloading ? -0.65 : 0) + localPlayer.recoilPitch * 1.4;
+
+      if (localPlayer.firing && (w.pattern.includes('auto') || w.pattern === 'ramping' || w.pattern === 'wallbang')) {
+        attemptFire();
+      }
+
+      // Cleanup expired 3D Bullet Tracers
+      activeTracers = activeTracers.filter((t) => {
+        if (now > t.expires) { scene.remove(t.line); scene.remove(t.spark); return false; }
+        return true;
       });
 
-      localPlayer.y += localPlayer.vy;
-      if (localPlayer.y > targetFloor) localPlayer.vy -= 0.008;
-      else { localPlayer.y = targetFloor; localPlayer.vy = 0; localPlayer.grounded = true; }
-
-      localPlayer.recoilOffset *= 0.88;
-      if (localPlayer.firing) {
-        const w = hero[me.weaponSlot];
-        if (w.pattern.includes('auto') || w.pattern === 'ramping' || w.pattern === 'wallbang') attemptFire();
-      }
-
-      camera.position.set(localPlayer.x, localPlayer.y + (localPlayer.stance === 'crouch' ? 1.0 : 1.6), localPlayer.z);
+      // 5. Update Camera & Send State
+      camera.position.set(localPlayer.x, localPlayer.y + (localPlayer.stance === 'crouch' ? 1.05 : 1.6), localPlayer.z);
       camera.rotation.order = 'YXZ';
-      camera.rotation.y = localPlayer.yaw;
-      camera.rotation.x = localPlayer.pitch + localPlayer.recoilOffset;
+      camera.rotation.y = localPlayer.yaw + localPlayer.recoilYaw;
+      camera.rotation.x = localPlayer.pitch + localPlayer.recoilPitch;
 
       socket.emit('moveUpdate', {
         x: localPlayer.x, y: localPlayer.y, z: localPlayer.z,
         yaw: localPlayer.yaw, pitch: localPlayer.pitch, stance: localPlayer.stance
       });
 
-      compassCtx.clearRect(0, 0, 220, 220);
-      const now = Date.now();
-      acousticRings = acousticRings.filter((r) => now - r.createdAt < 900);
-      acousticRings.forEach((r) => {
-        const angle = Math.atan2(r.x - localPlayer.x, r.z - localPlayer.z) - localPlayer.yaw + Math.PI;
-        const alpha = (1 - (now - r.createdAt) / 900) * r.intensity;
-        compassCtx.save();
-        compassCtx.translate(110, 110);
-        compassCtx.rotate(-angle);
-        compassCtx.beginPath();
-        compassCtx.arc(0, 0, 85, -Math.PI / 2 - 0.35, -Math.PI / 2 + 0.35);
-        compassCtx.strokeStyle = r.type === 'gunfire' ? `rgba(244,63,94,${alpha})` : `rgba(56,189,248,${alpha})`;
-        compassCtx.lineWidth = 6;
-        compassCtx.stroke();
-        compassCtx.restore();
-      });
+      // 6. Floating Enemy Nameplate + Dynamic Tactical Coach Banner
+      const opp = Object.values(roomState.players).find((p) => p.id !== socket.id);
+      const tagEl = document.getElementById('enemyTag');
+      const coachEl = document.getElementById('coachBanner');
+      let nearDoor = false;
+      (roomState.doors || []).forEach((d) => { if (Math.hypot(localPlayer.x - d.x, localPlayer.z - d.z) <= 8) nearDoor = true; });
+
+      if (opp) {
+        const oppPos = new THREE.Vector3(opp.x, opp.y + 2.1, opp.z);
+        const projected = oppPos.clone().project(camera);
+        const distToOpp = Math.hypot(opp.x - localPlayer.x, opp.z - localPlayer.z);
+        const inFront = projected.z < 1.0;
+
+        if (inFront && (distToOpp < 26 || now < opp.revealedUntil)) {
+          const sx = (projected.x * 0.5 + 0.5) * window.innerWidth;
+          const sy = (-projected.y * 0.5 + 0.5) * window.innerHeight;
+          tagEl.style.left = `${sx}px`;
+          tagEl.style.top = `${sy}px`;
+          tagEl.style.display = 'block';
+          document.getElementById('enemyTagName').textContent = `${opp.name} (${Math.max(0, opp.hp)} HP)`;
+          document.getElementById('enemyHpMiniFill').style.width = `${Math.max(0, (opp.hp / opp.maxHp) * 100)}%`;
+
+          if (speedRatio > 0.35) {
+            coachEl.textContent = '⚠️ MOVING REDUCES ACCURACY! Stop or Crouch [C] before firing!';
+            coachEl.style.borderLeftColor = '#f43f5e';
+          } else {
+            coachEl.textContent = '🎯 ACCURACY LOCKED: Aim for the head and pull down for recoil!';
+            coachEl.style.borderLeftColor = '#10b981';
+          }
+        } else {
+          tagEl.style.display = 'none';
+          if (nearDoor) {
+            coachEl.textContent = '🚪 NEAR BLAST DOOR: Press [F] (or tap DOOR) to open/close sightline.';
+            coachEl.style.borderLeftColor = '#eab308';
+          } else {
+            coachEl.textContent = '🎧 HUNT PHASE: Watch the Top-Left Minimap for Red Enemy Sound Rings!';
+            coachEl.style.borderLeftColor = '#38bdf8';
+          }
+        }
+      }
+
+      // 7. Render Live Top-Left 2D Tactical Minimap
+      drawMinimap(map, opp, now);
 
       renderer.render(scene, camera);
     }
+
+    function drawMinimap(map, opp, now) {
+      minimapCtx.clearRect(0, 0, 160, 160);
+      const scale = 160 / 60; // 60x60m arena mapped to 160x160px
+      const toPx = (v) => (v + 30) * scale;
+
+      // Draw map structures
+      map.structures.forEach((s) => {
+        minimapCtx.fillStyle = s.walkable ? 'rgba(100, 116, 139, 0.45)' : (s.ramp ? 'rgba(56, 189, 248, 0.45)' : '#334155');
+        minimapCtx.fillRect(toPx(s.x - s.w / 2), toPx(s.z - s.d / 2), s.w * scale, s.d * scale);
+      });
+
+      // Draw doors
+      (roomState.doors || []).forEach((d) => {
+        minimapCtx.fillStyle = d.open ? 'rgba(234, 179, 8, 0.25)' : '#eab308';
+        minimapCtx.fillRect(toPx(d.x - d.w / 2), toPx(d.z - d.d / 2), d.w * scale, d.d * scale);
+      });
+
+      // Draw Expanding Red Enemy Acoustic Sonar Rings
+      acousticPings = acousticPings.filter((p) => now - p.createdAt < 1100);
+      acousticPings.forEach((p) => {
+        const age = (now - p.createdAt) / 1100;
+        const r = (4 + age * 14) * scale;
+        minimapCtx.beginPath();
+        minimapCtx.arc(toPx(p.x), toPx(p.z), r, 0, Math.PI * 2);
+        minimapCtx.strokeStyle = `rgba(244, 63, 94, ${1 - age})`;
+        minimapCtx.lineWidth = 2;
+        minimapCtx.stroke();
+        // Center dot at sound origin
+        minimapCtx.fillStyle = `rgba(244, 63, 94, ${1 - age})`;
+        minimapCtx.fillRect(toPx(p.x) - 2, toPx(p.z) - 2, 4, 4);
+      });
+
+      // If Enemy is revealed by Echo Pulse / EMP, show solid red dot
+      if (opp && now < opp.revealedUntil) {
+        minimapCtx.fillStyle = '#f43f5e';
+        minimapCtx.beginPath();
+        minimapCtx.arc(toPx(opp.x), toPx(opp.z), 4.5, 0, Math.PI * 2);
+        minimapCtx.fill();
+      }
+
+      // Draw Local Player + Vision Cone
+      const px = toPx(localPlayer.x), pz = toPx(localPlayer.z);
+      minimapCtx.save();
+      minimapCtx.translate(px, pz);
+      minimapCtx.rotate(-localPlayer.yaw);
+      minimapCtx.fillStyle = 'rgba(56, 189, 248, 0.22)';
+      minimapCtx.beginPath();
+      minimapCtx.moveTo(0, 0);
+      minimapCtx.arc(0, 0, 26, -Math.PI / 2 - 0.45, -Math.PI / 2 + 0.45);
+      minimapCtx.closePath();
+      minimapCtx.fill();
+
+      minimapCtx.fillStyle = '#38bdf8';
+      minimapCtx.beginPath();
+      minimapCtx.arc(0, 0, 4, 0, Math.PI * 2);
+      minimapCtx.fill();
+      minimapCtx.restore();
+    }
+
     animate();
   </script>
 </body>
