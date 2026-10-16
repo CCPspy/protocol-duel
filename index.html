@@ -1,0 +1,1266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Protocol Duel" />
+  <title>PROTOCOL: DUEL // 1v1 Tactical Hero FPS</title>
+  <style>
+    * {
+      box-sizing: border-box; margin: 0; padding: 0;
+      user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    }
+    html, body {
+      width: 100%; height: 100dvh; overflow: hidden;
+      background: #090d12; color: #e2e8f0;
+      touch-action: none; overscroll-behavior: none;
+    }
+    #gameCanvas { display: block; width: 100vw; height: 100dvh; touch-action: none; }
+
+    /* Pre-Match Lobby Overlay */
+    #lobby {
+      position: fixed; inset: 0;
+      background: radial-gradient(circle at center, rgba(15,23,42,0.95), #05080c);
+      display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+      z-index: 30; padding: 16px; overflow-y: auto; touch-action: pan-y;
+    }
+    .lobby-card {
+      width: min(1100px, 96vw); background: rgba(15, 23, 42, 0.92);
+      border: 1px solid #334155; border-radius: 12px; padding: 20px;
+      margin: auto; box-shadow: 0 20px 50px rgba(0,0,0,0.7);
+    }
+    .header-row { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+    h1 { font-size: 24px; letter-spacing: 2px; color: #38bdf8; }
+    .net-badge {
+      font-size: 12px; background: #0f172a; border: 1px solid #38bdf8;
+      color: #38bdf8; padding: 4px 10px; border-radius: 999px; font-weight: 700;
+    }
+    .grid-section {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(155px, 1fr));
+      gap: 8px; margin-bottom: 14px;
+    }
+    .map-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 8px; margin-bottom: 14px;
+    }
+    .tile {
+      background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 10px;
+      cursor: pointer; transition: 0.15s; font-size: 12px;
+    }
+    .tile.active { border-color: #38bdf8; background: rgba(56, 189, 248, 0.16); }
+    .tile strong { display: block; font-size: 14px; color: #f8fafc; margin-bottom: 3px; }
+    .controls-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
+    input, select, button {
+      background: #0f172a; border: 1px solid #475569; color: #f8fafc; padding: 10px 12px;
+      border-radius: 6px; font-size: 13px;
+    }
+    button.launch-btn {
+      background: #0284c7; border-color: #38bdf8; font-weight: 700; cursor: pointer; margin-left: auto;
+      padding: 10px 20px; font-size: 14px;
+    }
+    button.launch-btn:hover { background: #0369a1; }
+
+    /* In-Game Tactical HUD */
+    #hud { position: fixed; inset: 0; pointer-events: none; display: none; z-index: 10; }
+    #crosshair {
+      position: absolute; top: 50%; left: 50%; width: 16px; height: 16px;
+      transform: translate(-50%, -50%);
+    }
+    #crosshair::before, #crosshair::after { content: ''; position: absolute; background: #00f5d4; }
+    #crosshair::before { top: 7px; left: 0; width: 16px; height: 2px; }
+    #crosshair::after { left: 7px; top: 0; width: 2px; height: 16px; }
+    #hitIndicator {
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      color: #f43f5e; font-weight: 900; font-size: 24px; opacity: 0; transition: opacity 0.1s;
+    }
+    .top-bar {
+      position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+      background: rgba(15, 23, 42, 0.88); border: 1px solid #334155; border-radius: 8px;
+      padding: 6px 14px; display: flex; gap: 14px; align-items: center; font-weight: 700; font-size: 12px;
+      white-space: nowrap;
+    }
+    #touchToggleBtn, #lobbyReturnBtn {
+      pointer-events: auto; background: #1e293b; border: 1px solid #475569;
+      color: #38bdf8; padding: 4px 8px; border-radius: 4px; font-size: 11px; cursor: pointer;
+    }
+    .bottom-left {
+      position: absolute; top: 54px; left: 14px; background: rgba(15, 23, 42, 0.82);
+      border: 1px solid #334155; border-radius: 8px; padding: 10px 14px; min-width: 205px;
+    }
+    .bottom-right {
+      position: absolute; top: 54px; right: 14px; background: rgba(15, 23, 42, 0.82);
+      border: 1px solid #334155; border-radius: 8px; padding: 10px 14px; text-align: right; min-width: 215px;
+    }
+    .hp-bar { width: 100%; height: 8px; background: #1e293b; border-radius: 4px; overflow: hidden; margin-top: 5px; }
+    .hp-fill { height: 100%; background: #10b981; width: 100%; transition: width 0.15s; }
+    #acousticCompass {
+      position: absolute; top: 50%; left: 50%; width: 220px; height: 220px;
+      transform: translate(-50%, -50%); border-radius: 50%; pointer-events: none;
+    }
+    #killFeed { position: absolute; top: 150px; right: 14px; display: flex; flex-direction: column; gap: 5px; }
+    .feed-item { background: rgba(15,23,42,0.88); border-left: 3px solid #38bdf8; padding: 5px 10px; font-size: 12px; }
+    #blackoutBanner {
+      position: absolute; top: 50px; left: 50%; transform: translateX(-50%);
+      background: rgba(170, 0, 255, 0.9); padding: 5px 14px; border-radius: 4px; font-weight: 700; display: none;
+    }
+
+    /* iPad / Touch Controls Overlay */
+    #touchControls { position: fixed; inset: 0; pointer-events: none; display: none; z-index: 15; }
+    #joystickZone {
+      position: absolute; bottom: 26px; left: 26px; width: 148px; height: 148px;
+      border-radius: 50%; background: rgba(15, 23, 42, 0.45);
+      border: 2px solid rgba(56, 189, 248, 0.45); pointer-events: auto; touch-action: none;
+    }
+    #joystickQuietRing {
+      position: absolute; top: 50%; left: 50%; width: 80px; height: 80px;
+      transform: translate(-50%, -50%); border-radius: 50%;
+      border: 1px dashed rgba(148, 163, 184, 0.45); pointer-events: none;
+    }
+    #joystickKnob {
+      position: absolute; top: 50%; left: 50%; width: 52px; height: 52px;
+      transform: translate(-50%, -50%); border-radius: 50%;
+      background: rgba(56, 189, 248, 0.78); box-shadow: 0 0 12px rgba(56, 189, 248, 0.6);
+      pointer-events: none;
+    }
+    #lookZone {
+      position: absolute; top: 0; right: 0; width: 55vw; height: 100dvh;
+      pointer-events: auto; touch-action: none;
+    }
+    .t-btn {
+      position: absolute; pointer-events: auto; touch-action: none;
+      border-radius: 50%; background: rgba(15, 23, 42, 0.78);
+      border: 2px solid #38bdf8; color: #f8fafc; font-weight: 800;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      font-size: 11px; cursor: pointer;
+    }
+    .t-btn:active, .t-btn.active-toggle { background: rgba(56, 189, 248, 0.45); }
+    #btnFire {
+      bottom: 38px; right: 38px; width: 86px; height: 86px;
+      background: rgba(244, 63, 94, 0.38); border-color: #f43f5e; font-size: 15px;
+    }
+    #btnCrouch { bottom: 28px; right: 142px; width: 58px; height: 58px; }
+    #btnJump   { bottom: 98px; right: 142px; width: 58px; height: 58px; }
+    #btnReload { bottom: 140px; right: 52px; width: 56px; height: 56px; }
+    #btnSwap   { bottom: 140px; right: 118px; width: 56px; height: 56px; }
+    #btnDef    { bottom: 206px; right: 106px; width: 60px; height: 60px; border-color: #22d3ee; }
+    #btnUlt    { bottom: 206px; right: 34px; width: 60px; height: 60px; border-color: #f59e0b; color: #fde68a; }
+    #btnDoor   { bottom: 190px; left: 50px; width: 56px; height: 56px; border-color: #eab308; }
+  </style>
+</head>
+<body>
+
+  <!-- PRE-MATCH TACTICAL LOBBY -->
+  <div id="lobby">
+    <div class="lobby-card">
+      <div class="header-row">
+        <div>
+          <h1>PROTOCOL: DUEL</h1>
+          <p style="font-size:12px; color:#94a3b8;">1v1 Tactical Hero FPS — GitHub Pages, iPad Touch & Desktop Ready</p>
+        </div>
+        <span class="net-badge" id="netStatusBadge">NETWORK: INITIALIZING...</span>
+      </div>
+
+      <p style="font-size:12px; color:#38bdf8; margin-bottom:6px; font-weight:700;">1. SELECT OPERATIVE (6 HEROES)</p>
+      <div class="grid-section" id="heroGrid"></div>
+
+      <p style="font-size:12px; color:#38bdf8; margin-bottom:6px; font-weight:700;">2. SELECT ARENA (5 LAUNCH MAPS)</p>
+      <div class="map-grid" id="mapGrid"></div>
+
+      <div class="controls-row">
+        <input id="playerName" value="Operative_01" placeholder="Callsign" style="width:140px;" />
+        <input id="roomId" value="duel-arena-1" placeholder="Room ID (Match Code)" style="width:150px;" />
+        <select id="modeSelect">
+          <option value="stock">Stock Mode (3 Lives)</option>
+          <option value="timer">Timer Mode (3:00 Clock)</option>
+        </select>
+        <select id="roleSelect" title="For GitHub Pages 1v1 between 2 devices">
+          <option value="host">Host Room / Solo vs AI</option>
+          <option value="join">Join Friend's Room ID (1v1 P2P)</option>
+        </select>
+        <label style="font-size:12px; display:flex; align-items:center; gap:5px; cursor:pointer;">
+          <input type="checkbox" id="botToggle" checked /> Spawn AI Duelist
+        </label>
+        <button class="launch-btn" id="deployBtn">DEPLOY TO ARENA</button>
+      </div>
+      <p style="font-size:11px; color:#94a3b8; margin-top:10px; line-height:1.4;">
+        <strong>PC Controls:</strong> WASD Move | Shift Walk (Quiet) | C Crouch (Silent) | Space Jump | LMB Fire | 1/2 Swap | R Reload | E Defensive | Q Ultimate | F Door<br/>
+        <strong>iPad Controls:</strong> Left Stick (Inner Ring = Quiet Walk, Outer = Sprint) | Drag Right Screen = Aim | Tap Action Buttons<br/>
+        <strong>GitHub Pages 1v1 (PC vs iPad):</strong> Uncheck "Spawn AI Duelist". Device 1 picks <em>Host Room</em> with Room ID <code>duel-arena-1</code>; Device 2 picks <em>Join Friend's Room ID</em> with the same Room ID.
+      </p>
+    </div>
+  </div>
+
+  <!-- IN-GAME HUD -->
+  <div id="hud">
+    <div class="top-bar">
+      <span id="hudMapName">THE FOUNDRY</span>
+      <span id="hudModeStat" style="color:#38bdf8;">STOCKS: 3 vs 3</span>
+      <span id="hudScore">ELIMS: 0 - 0</span>
+      <button id="touchToggleBtn">TOUCH HUD: AUTO</button>
+      <button id="lobbyReturnBtn">LOBBY</button>
+    </div>
+    <div id="blackoutBanner">NEURAL BLACKOUT ACTIVE — TELEMETRY SCRAMBLED</div>
+    <div id="crosshair"></div>
+    <div id="hitIndicator">✕</div>
+    <canvas id="acousticCompass" width="220" height="220"></canvas>
+    <div id="killFeed"></div>
+
+    <div class="bottom-left">
+      <div style="display:flex; justify-content:space-between; font-size:12px; font-weight:700;">
+        <span id="hudHeroName">VEX</span>
+        <span id="hudStance" style="color:#38bdf8;">STAND</span>
+      </div>
+      <div style="font-size:20px; font-weight:800; margin-top:2px;" id="hudHpText">100 HP</div>
+      <div class="hp-bar"><div class="hp-fill" id="hudHpFill"></div></div>
+    </div>
+
+    <div class="bottom-right">
+      <div style="font-size:13px; font-weight:700; color:#38bdf8;" id="hudWeaponName">SR-9 Talon</div>
+      <div style="font-size:22px; font-weight:800; margin:2px 0;" id="hudAmmo">8 / 8</div>
+      <div style="font-size:11px; color:#cbd5e1;" id="hudDefStatus">[E] Phase Step: READY</div>
+      <div style="font-size:11px; color:#f59e0b; margin-top:2px;" id="hudUltStatus">[Q] Echo Pulse: 25%</div>
+    </div>
+  </div>
+
+  <!-- iPAD / MOBILE TWIN-STICK TOUCH CONTROLS -->
+  <div id="touchControls">
+    <div id="lookZone"></div>
+    <div id="joystickZone">
+      <div id="joystickQuietRing"></div>
+      <div id="joystickKnob"></div>
+    </div>
+    <div class="t-btn" id="btnDoor">DOOR<small>F</small></div>
+    <div class="t-btn" id="btnFire">FIRE</div>
+    <div class="t-btn" id="btnCrouch">CROUCH<small>SILENT</small></div>
+    <div class="t-btn" id="btnJump">JUMP</div>
+    <div class="t-btn" id="btnReload">RELOAD<small>R</small></div>
+    <div class="t-btn" id="btnSwap">SWAP<small>1/2</small></div>
+    <div class="t-btn" id="btnDef">DEF<small>E</small></div>
+    <div class="t-btn" id="btnUlt">ULT<small>Q</small></div>
+  </div>
+
+  <canvas id="gameCanvas"></canvas>
+
+  <!-- CDN Libraries: Three.js + Socket.io Client + PeerJS (for Serverless GitHub Pages 1v1) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+
+  <script>
+    // ========================================================================
+    // 1. SHARED GAME CATALOG (6 HEROES & 5 MAPS)
+    // ========================================================================
+    const HEROES = {
+      vex: {
+        id: 'vex', name: 'VEX', role: 'Recon Anchor', color: 0x00e5ff, maxHp: 100, speed: 7.2,
+        primary: { name: 'SR-9 Talon (Rifle)', dmg: 68, headMult: 2.13, fireRateMs: 750, mag: 8, reloadMs: 1800, spread: 0.002, recoilPitch: 0.065, recoilYaw: 0.008, pellets: 1, noiseRadius: 38, pattern: 'single' },
+        secondary: { name: 'P4-Whisper (Silenced)', dmg: 25, headMult: 2.0, fireRateMs: 165, mag: 12, reloadMs: 1200, spread: 0.012, recoilPitch: 0.018, recoilYaw: 0.005, pellets: 1, noiseRadius: 11, pattern: 'semi-silenced' },
+        defensive: { name: 'Phase Step', cdMs: 14000, durationMs: 350 },
+        ultimate: { name: 'Echo Pulse', cost: 1000, durationMs: 6000 }
+      },
+      krosh: {
+        id: 'krosh', name: 'KROSH', role: 'Breacher', color: 0xff5722, maxHp: 125, speed: 6.6,
+        primary: { name: 'M88 Slag (Shotgun)', dmg: 12, headMult: 1.5, fireRateMs: 850, mag: 6, reloadMs: 2100, spread: 0.065, recoilPitch: 0.08, recoilYaw: 0.035, pellets: 10, noiseRadius: 42, pattern: 'shotgun' },
+        secondary: { name: 'Vulcan .50 (Revolver)', dmg: 56, headMult: 2.0, fireRateMs: 460, mag: 6, reloadMs: 1700, spread: 0.006, recoilPitch: 0.055, recoilYaw: 0.012, pellets: 1, noiseRadius: 36, pattern: 'revolver' },
+        defensive: { name: 'Aegis Bulwark', cdMs: 16000, durationMs: 4500 },
+        ultimate: { name: 'Seismic Overdrive', cost: 1100, durationMs: 4000 }
+      },
+      cipher: {
+        id: 'cipher', name: 'CIPHER', role: 'Tactician', color: 0xaa00ff, maxHp: 100, speed: 7.4,
+        primary: { name: 'VX-3 Hornet (Burst SMG)', dmg: 20, headMult: 2.0, fireRateMs: 260, mag: 27, reloadMs: 1500, spread: 0.014, recoilPitch: 0.022, recoilYaw: 0.018, pellets: 1, noiseRadius: 28, pattern: 'burst' },
+        secondary: { name: 'G-18 Stinger (Auto-Pistol)', dmg: 14, headMult: 1.8, fireRateMs: 75, mag: 18, reloadMs: 1300, spread: 0.032, recoilPitch: 0.026, recoilYaw: 0.022, pellets: 1, noiseRadius: 25, pattern: 'auto' },
+        defensive: { name: 'Dynamic Smoke Wall', cdMs: 15000, durationMs: 6000 },
+        ultimate: { name: 'Neural Blackout', cost: 1050, durationMs: 8000 }
+      },
+      sable: {
+        id: 'sable', name: 'SABLE', role: 'Silent Lurker', color: 0x00e676, maxHp: 100, speed: 7.7,
+        primary: { name: 'KR-7 Spectre (Carbine)', dmg: 26, headMult: 2.0, fireRateMs: 92, mag: 24, reloadMs: 1550, spread: 0.015, recoilPitch: 0.02, recoilYaw: 0.014, pellets: 1, noiseRadius: 15, pattern: 'auto-silenced' },
+        secondary: { name: 'Volt-2 (Sensor Pistol)', dmg: 22, headMult: 1.5, fireRateMs: 400, mag: 4, reloadMs: 1400, spread: 0.008, recoilPitch: 0.012, recoilYaw: 0.004, pellets: 1, noiseRadius: 10, pattern: 'sensor' },
+        defensive: { name: 'Mirage Cloak', cdMs: 17000, durationMs: 2600 },
+        ultimate: { name: 'Shadow Stalker', cost: 1000, durationMs: 10000 }
+      },
+      bastion: {
+        id: 'bastion', name: 'BASTION', role: 'Zone Controller', color: 0xffc400, maxHp: 115, speed: 6.8,
+        primary: { name: 'HMG-42 Anvil (Battle Rifle)', dmg: 39, headMult: 2.0, fireRateMs: 135, mag: 20, reloadMs: 2000, spread: 0.011, recoilPitch: 0.038, recoilYaw: 0.01, pellets: 1, noiseRadius: 40, pattern: 'wallbang' },
+        secondary: { name: 'Flare-X (Incendiary)', dmg: 32, headMult: 1.4, fireRateMs: 650, mag: 3, reloadMs: 1600, spread: 0.01, recoilPitch: 0.03, recoilYaw: 0.005, pellets: 1, noiseRadius: 26, pattern: 'incendiary' },
+        defensive: { name: 'Hardlight Barricade', cdMs: 16000, durationMs: 7000 },
+        ultimate: { name: 'Lockdown Array', cost: 1150, durationMs: 9000 }
+      },
+      volt: {
+        id: 'volt', name: 'VOLT', role: 'Kinetic Duelist', color: 0x2979ff, maxHp: 100, speed: 7.5,
+        primary: { name: 'AR-11 Pulse (Energy AR)', dmg: 24, headMult: 2.0, fireRateMs: 80, mag: 28, reloadMs: 1450, spread: 0.013, recoilPitch: 0.021, recoilYaw: 0.009, pellets: 1, noiseRadius: 30, pattern: 'ramping' },
+        secondary: { name: 'Mag-Shot (Ricochet)', dmg: 34, headMult: 2.0, fireRateMs: 280, mag: 8, reloadMs: 1350, spread: 0.007, recoilPitch: 0.03, recoilYaw: 0.008, pellets: 1, noiseRadius: 28, pattern: 'ricochet' },
+        defensive: { name: 'Kinetic Deflector', cdMs: 15000, durationMs: 1300 },
+        ultimate: { name: 'Chrono Rewind', cost: 1100, durationMs: 6000 }
+      }
+    };
+
+    const MAPS = {
+      foundry: {
+        id: 'foundry', name: 'The Foundry', subtitle: 'High-Verticality Catwalks & Noisy Metal Flooring',
+        ambientColor: 0x2a1a14, fogColor: 0x1a0f0a, floorMat: 'concrete',
+        spawns: [{ x: -22, y: 0, z: -22, yaw: -Math.PI / 4 }, { x: 22, y: 4, z: 22, yaw: (3 * Math.PI) / 4 }],
+        structures: [
+          { x: 0, y: 5, z: -30, w: 60, h: 10, d: 2, mat: 'concrete', color: 0x3a322d },
+          { x: 0, y: 5, z: 30, w: 60, h: 10, d: 2, mat: 'concrete', color: 0x3a322d },
+          { x: -30, y: 5, z: 0, w: 2, h: 10, d: 60, mat: 'concrete', color: 0x3a322d },
+          { x: 30, y: 5, z: 0, w: 2, h: 10, d: 60, mat: 'concrete', color: 0x3a322d },
+          { x: 0, y: 2.5, z: 0, w: 10, h: 5, d: 10, mat: 'metal', color: 0x8c2d19 },
+          { x: -14, y: 3.8, z: 0, w: 6, h: 0.4, d: 44, mat: 'metal', color: 0x606870, walkable: true },
+          { x: 14, y: 3.8, z: 0, w: 6, h: 0.4, d: 44, mat: 'metal', color: 0x606870, walkable: true },
+          { x: 0, y: 3.8, z: -16, w: 22, h: 0.4, d: 5, mat: 'metal', color: 0x606870, walkable: true },
+          { x: 0, y: 3.8, z: 16, w: 22, h: 0.4, d: 5, mat: 'metal', color: 0x606870, walkable: true },
+          { x: -14, y: 1.9, z: -24, w: 5, h: 3.8, d: 6, mat: 'metal', color: 0x50555c, ramp: true },
+          { x: 14, y: 1.9, z: 24, w: 5, h: 3.8, d: 6, mat: 'metal', color: 0x50555c, ramp: true },
+          { x: -8, y: 2, z: -9, w: 3, h: 4, d: 3, mat: 'concrete', color: 0x4b423c },
+          { x: 8, y: 2, z: 9, w: 3, h: 4, d: 3, mat: 'concrete', color: 0x4b423c }
+        ],
+        doors: []
+      },
+      subzero: {
+        id: 'subzero', name: 'Sub-Zero Station', subtitle: 'Tight Arctic Corridors & Dynamic Blast Doors',
+        ambientColor: 0x162636, fogColor: 0x102030, floorMat: 'snow',
+        spawns: [{ x: -24, y: 0, z: 0, yaw: -Math.PI / 2 }, { x: 24, y: 0, z: 0, yaw: Math.PI / 2 }],
+        structures: [
+          { x: 0, y: 4, z: -30, w: 60, h: 8, d: 2, mat: 'concrete', color: 0x627d98 },
+          { x: 0, y: 4, z: 30, w: 60, h: 8, d: 2, mat: 'concrete', color: 0x627d98 },
+          { x: -30, y: 4, z: 0, w: 2, h: 8, d: 60, mat: 'concrete', color: 0x627d98 },
+          { x: 30, y: 4, z: 0, w: 2, h: 8, d: 60, mat: 'concrete', color: 0x627d98 },
+          { x: 0, y: 3, z: -10, w: 28, h: 6, d: 2, mat: 'metal', color: 0xd9e2ec },
+          { x: 0, y: 3, z: 10, w: 28, h: 6, d: 2, mat: 'metal', color: 0xd9e2ec },
+          { x: -5, y: 1.8, z: 0, w: 3, h: 3.6, d: 3, mat: 'metal', color: 0x00b4d8 },
+          { x: 5, y: 1.8, z: 0, w: 3, h: 3.6, d: 3, mat: 'metal', color: 0x00b4d8 },
+          { x: 0, y: 1.5, z: -22, w: 12, h: 3, d: 4, mat: 'snow', color: 0xf0f4f8 },
+          { x: 0, y: 1.5, z: 22, w: 12, h: 3, d: 4, mat: 'snow', color: 0xf0f4f8 }
+        ],
+        doors: [
+          { id: 'cryo_west', x: -14, y: 2.5, z: 0, w: 1.5, h: 5, d: 8, open: false },
+          { id: 'cryo_east', x: 14, y: 2.5, z: 0, w: 1.5, h: 5, d: 8, open: false }
+        ]
+      },
+      overpass: {
+        id: 'overpass', name: 'Overpass Hub', subtitle: 'Long Sniper Sightlines & Subterranean Tunnels',
+        ambientColor: 0x1f2430, fogColor: 0x12151e, floorMat: 'concrete',
+        spawns: [{ x: -25, y: 0, z: -20, yaw: 0 }, { x: 25, y: 0, z: 20, yaw: Math.PI }],
+        structures: [
+          { x: 0, y: 5, z: -30, w: 60, h: 10, d: 2, mat: 'concrete', color: 0x333942 },
+          { x: 0, y: 5, z: 30, w: 60, h: 10, d: 2, mat: 'concrete', color: 0x333942 },
+          { x: -30, y: 5, z: 0, w: 2, h: 10, d: 60, mat: 'concrete', color: 0x333942 },
+          { x: 30, y: 5, z: 0, w: 2, h: 10, d: 60, mat: 'concrete', color: 0x333942 },
+          { x: 0, y: 4.2, z: -18, w: 50, h: 0.5, d: 8, mat: 'concrete', color: 0x525c6a, walkable: true },
+          { x: -24, y: 2.1, z: -12, w: 6, h: 4.2, d: 6, mat: 'concrete', color: 0x454e59, ramp: true },
+          { x: 24, y: 2.1, z: -12, w: 6, h: 4.2, d: 6, mat: 'concrete', color: 0x454e59, ramp: true },
+          { x: 0, y: 2.5, z: 14, w: 42, h: 5, d: 2, mat: 'concrete', color: 0x2b303a },
+          { x: 0, y: 4.8, z: 21, w: 42, h: 0.6, d: 14, mat: 'concrete', color: 0x22262e, walkable: true },
+          { x: 0, y: 2.0, z: -2, w: 22, h: 4.0, d: 4.5, mat: 'metal', color: 0x2b5876 }
+        ],
+        doors: []
+      },
+      sanctuary: {
+        id: 'sanctuary', name: 'The Sanctuary', subtitle: 'Sound-Muffling Gardens & Wooden Chokepoints',
+        ambientColor: 0x1b2a1e, fogColor: 0x0f1911, floorMat: 'grass',
+        spawns: [{ x: -23, y: 0, z: 23, yaw: -Math.PI / 4 }, { x: 23, y: 0, z: -23, yaw: (3 * Math.PI) / 4 }],
+        structures: [
+          { x: 0, y: 4, z: -30, w: 60, h: 8, d: 2, mat: 'wood', color: 0x4a3525 },
+          { x: 0, y: 4, z: 30, w: 60, h: 8, d: 2, mat: 'wood', color: 0x4a3525 },
+          { x: -30, y: 4, z: 0, w: 2, h: 8, d: 60, mat: 'wood', color: 0x4a3525 },
+          { x: 30, y: 4, z: 0, w: 2, h: 8, d: 60, mat: 'wood', color: 0x4a3525 },
+          { x: 0, y: 2.2, z: 0, w: 18, h: 0.4, d: 18, mat: 'wood', color: 0x7c4d2b, walkable: true },
+          { x: 0, y: 1.1, z: -11, w: 6, h: 2.2, d: 4, mat: 'wood', color: 0x6b4226, ramp: true },
+          { x: 0, y: 1.1, z: 11, w: 6, h: 2.2, d: 4, mat: 'wood', color: 0x6b4226, ramp: true },
+          { x: -18, y: 2.5, z: 0, w: 2, h: 5, d: 16, mat: 'wood', color: 0x5c3a21 },
+          { x: 18, y: 2.5, z: 0, w: 2, h: 5, d: 16, mat: 'wood', color: 0x5c3a21 }
+        ],
+        doors: []
+      },
+      aegis: {
+        id: 'aegis', name: 'Aegis Bunker', subtitle: 'Underground Silo & Central Control Room',
+        ambientColor: 0x142228, fogColor: 0x0a1216, floorMat: 'concrete',
+        spawns: [{ x: 0, y: 0, z: -25, yaw: Math.PI }, { x: 0, y: 0, z: 25, yaw: 0 }],
+        structures: [
+          { x: 0, y: 5, z: -30, w: 60, h: 10, d: 2, mat: 'concrete', color: 0x24343d },
+          { x: 0, y: 5, z: 30, w: 60, h: 10, d: 2, mat: 'concrete', color: 0x24343d },
+          { x: -30, y: 5, z: 0, w: 2, h: 10, d: 60, mat: 'concrete', color: 0x24343d },
+          { x: 30, y: 5, z: 0, w: 2, h: 10, d: 60, mat: 'concrete', color: 0x24343d },
+          { x: 0, y: 2.8, z: 0, w: 16, h: 0.4, d: 16, mat: 'metal', color: 0x37515f, walkable: true },
+          { x: -10, y: 1.4, z: 0, w: 4, h: 2.8, d: 5, mat: 'metal', color: 0x2c424e, ramp: true },
+          { x: 10, y: 1.4, z: 0, w: 4, h: 2.8, d: 5, mat: 'metal', color: 0x2c424e, ramp: true },
+          { x: -20, y: 2.5, z: -14, w: 3, h: 5, d: 12, mat: 'concrete', color: 0x2f4450 },
+          { x: 20, y: 2.5, z: 14, w: 3, h: 5, d: 12, mat: 'concrete', color: 0x2f4450 }
+        ],
+        doors: [
+          { id: 'silo_north', x: 0, y: 2.5, z: -14, w: 8, h: 5, d: 1.5, open: true },
+          { id: 'silo_south', x: 0, y: 2.5, z: 14, w: 8, h: 5, d: 1.5, open: true }
+        ]
+      }
+    };
+
+    const SURFACE_MULT = { metal: 1.8, wood: 1.6, concrete: 1.0, snow: 0.75, grass: 0.4 };
+
+    // ========================================================================
+    // 2. HYBRID SOCKET.IO + GITHUB PAGES SERVERLESS ADAPTER
+    // ========================================================================
+    class HybridSocketAdapter {
+      constructor() {
+        this.id = 'local_player_1';
+        this.handlers = {};
+        this.mode = 'serverless'; // 'socketio' | 'serverless' | 'p2p-client'
+        this.realSocket = null;
+        this.peer = null;
+        this.peerConn = null;
+        this.room = null;
+        this.initNetwork();
+      }
+
+      on(event, fn) {
+        this.handlers[event] = fn;
+      }
+
+      triggerClient(event, data) {
+        if (this.handlers[event]) this.handlers[event](data);
+      }
+
+      initNetwork() {
+        const badge = document.getElementById('netStatusBadge');
+        // If running on localhost with Node server.js, try real Socket.io first
+        const isStaticHost = location.hostname.includes('github.io') || location.protocol === 'file:';
+        if (!isStaticHost && typeof io !== 'undefined') {
+          const sock = io({ reconnectionAttempts: 1, timeout: 1500 });
+          sock.on('connect', () => {
+            this.mode = 'socketio';
+            this.id = sock.id;
+            this.realSocket = sock;
+            badge.textContent = 'NETWORK: SOCKET.IO SERVER ONLINE';
+            badge.style.borderColor = '#10b981';
+            badge.style.color = '#10b981';
+            ['initCatalog', 'matchState', 'doorState', 'worldTick', 'acousticPing', 'hitMarker', 'killFeed', 'matchOver', 'timerSync'].forEach((ev) => {
+              sock.on(ev, (payload) => this.triggerClient(ev, payload));
+            });
+          });
+          sock.on('connect_error', () => {
+            sock.close();
+            this.activateServerlessEngine(badge);
+          });
+        } else {
+          this.activateServerlessEngine(badge);
+        }
+      }
+
+      activateServerlessEngine(badge) {
+        this.mode = 'serverless';
+        badge.textContent = 'NETWORK: GITHUB PAGES HYBRID ENGINE READY';
+        setTimeout(() => this.triggerClient('initCatalog', { heroes: HEROES, maps: MAPS }), 50);
+      }
+
+      emit(event, data) {
+        if (this.mode === 'socketio' && this.realSocket) {
+          this.realSocket.emit(event, data);
+          return;
+        }
+        if (this.mode === 'p2p-client' && this.peerConn && this.peerConn.open) {
+          this.peerConn.send({ event, data, senderId: this.id });
+          return;
+        }
+        this.handleAuthoritativeEvent(this.id, event, data);
+      }
+
+      // Embedded Authoritative Server for GitHub Pages (Supports Solo AI + WebRTC 1v1)
+      createPlayer(id, name, heroId, spawn, isBot = false) {
+        const h = HEROES[heroId] || HEROES.vex;
+        return {
+          id, name, isBot, heroId: h.id,
+          x: spawn.x, y: spawn.y, z: spawn.z, yaw: spawn.yaw || 0, pitch: 0,
+          stance: 'stand', hp: h.maxHp, maxHp: h.maxHp, armor: 0,
+          stocks: 3, kills: 0, deaths: 0, weaponSlot: 'primary',
+          ammo: { primary: h.primary.mag, secondary: h.secondary.mag },
+          reloadingUntil: 0, defCdUntil: 0, defActiveUntil: 0,
+          ultCharge: 250, ultMax: h.ultimate.cost, ultActiveUntil: 0,
+          slowedUntil: 0, blackoutUntil: 0, revealedUntil: 0,
+          lastShotAt: 0, lastStepAt: 0, history: []
+        };
+      }
+
+      broadcast(event, payload) {
+        this.triggerClient(event, payload);
+        if (this.peerConn && this.peerConn.open) {
+          this.peerConn.send({ event, payload });
+        }
+      }
+
+      sendTo(targetId, event, payload) {
+        if (targetId === this.id) {
+          this.triggerClient(event, payload);
+        } else if (this.peerConn && this.peerConn.open) {
+          this.peerConn.send({ event, payload });
+        }
+      }
+
+      setupP2P(roomId, role, joinPayload) {
+        const cleanRoom = 'protocol-duel-' + roomId.replace(/[^a-z0-9]/gi, '').toLowerCase();
+        if (typeof Peer === 'undefined') return;
+
+        if (role === 'host') {
+          this.peer = new Peer(cleanRoom);
+          this.peer.on('connection', (conn) => {
+            this.peerConn = conn;
+            conn.on('data', (msg) => {
+              if (msg.event) this.handleAuthoritativeEvent(msg.senderId || 'peer_player_2', msg.event, msg.data);
+            });
+          });
+        } else {
+          this.mode = 'p2p-client';
+          this.id = 'peer_player_2';
+          this.peer = new Peer();
+          this.peer.on('open', () => {
+            const conn = this.peer.connect(cleanRoom);
+            this.peerConn = conn;
+            conn.on('open', () => {
+              conn.send({ event: 'joinMatch', data: joinPayload, senderId: this.id });
+            });
+            conn.on('data', (msg) => {
+              if (msg.event) this.triggerClient(msg.event, msg.payload);
+            });
+          });
+        }
+      }
+
+      handleAuthoritativeEvent(pid, event, data) {
+        if (event === 'joinMatch') {
+          const role = document.getElementById('roleSelect').value;
+          if (pid === this.id && role === 'join') {
+            this.setupP2P(data.roomId, 'join', data);
+            return;
+          }
+          if (!this.room) {
+            const mId = MAPS[data.mapId] ? data.mapId : 'foundry';
+            this.room = {
+              id: data.roomId, mapId: mId, mode: data.mode || 'stock',
+              timeRemaining: 180, over: false, players: {}, deployables: [],
+              doors: JSON.parse(JSON.stringify(MAPS[mId].doors))
+            };
+            if (pid === this.id) this.setupP2P(data.roomId, 'host', data);
+            this.startServerLoops();
+          }
+          const map = MAPS[this.room.mapId];
+          const idx = Object.keys(this.room.players).length % 2;
+          this.room.players[pid] = this.createPlayer(pid, data.playerName, data.heroId, map.spawns[idx], false);
+
+          if (data.spawnBot && Object.keys(this.room.players).length < 2) {
+            const pool = Object.keys(HEROES).filter((k) => k !== data.heroId);
+            const botHero = pool[Math.floor(Math.random() * pool.length)];
+            this.room.players['bot_1'] = this.createPlayer('bot_1', `AI // ${HEROES[botHero].name}`, botHero, map.spawns[1], true);
+          }
+
+          this.broadcast('matchState', {
+            roomId: this.room.id, mapId: this.room.mapId, mode: this.room.mode,
+            timeRemaining: this.room.timeRemaining, doors: this.room.doors, players: this.room.players
+          });
+        }
+
+        if (!this.room || this.room.over) return;
+        const p = this.room.players[pid];
+        if (!p) return;
+        const now = Date.now();
+        const hero = HEROES[p.heroId];
+
+        if (event === 'moveUpdate') {
+          const dist = Math.hypot(data.x - p.x, data.z - p.z);
+          p.x = data.x; p.y = data.y; p.z = data.z;
+          p.yaw = data.yaw; p.pitch = data.pitch; p.stance = data.stance;
+          p.history.push({ t: now, x: p.x, y: p.y, z: p.z, hp: p.hp });
+          if (p.history.length > 55) p.history.shift();
+
+          if (dist > 0.07 && p.stance !== 'crouch') {
+            const base = p.stance === 'walk' ? 4.5 : 18.0;
+            if (now - p.lastStepAt > (p.stance === 'walk' ? 520 : 310)) {
+              p.lastStepAt = now;
+              this.emitNoise(p, base, 'footstep');
+            }
+          }
+        } else if (event === 'switchWeapon') {
+          p.weaponSlot = data === 'secondary' ? 'secondary' : 'primary';
+        } else if (event === 'reloadWeapon') {
+          const w = hero[p.weaponSlot];
+          if (now < p.reloadingUntil || p.ammo[p.weaponSlot] === w.mag) return;
+          p.reloadingUntil = now + w.reloadMs;
+          setTimeout(() => { if (this.room && this.room.players[pid]) this.room.players[pid].ammo[p.weaponSlot] = w.mag; }, w.reloadMs);
+        } else if (event === 'toggleDoor') {
+          this.room.doors.forEach((d) => {
+            if (Math.hypot(p.x - d.x, p.z - d.z) <= 8.5) {
+              d.open = !d.open;
+              this.emitNoise(p, 30, 'door');
+              this.broadcast('doorState', this.room.doors);
+            }
+          });
+        } else if (event === 'useAbility') {
+          if (data === 'defensive' && now >= p.defCdUntil) {
+            p.defCdUntil = now + hero.defensive.cdMs;
+            p.defActiveUntil = now + hero.defensive.durationMs;
+            if (p.heroId === 'vex') {
+              p.x = Math.max(-28, Math.min(28, p.x - Math.sin(p.yaw) * 6.5));
+              p.z = Math.max(-28, Math.min(28, p.z - Math.cos(p.yaw) * 6.5));
+              if (pid === this.id) { localPlayer.x = p.x; localPlayer.z = p.z; }
+            } else if (p.heroId === 'cipher') {
+              this.room.deployables.push({ id: 'smk_' + now, type: 'smoke', x: p.x - Math.sin(p.yaw) * 7, y: p.y + 1.8, z: p.z - Math.cos(p.yaw) * 7, w: 9, h: 3.8, d: 3.5, expiresAt: now + 6000 });
+            } else if (p.heroId === 'bastion') {
+              this.room.deployables.push({ id: 'bar_' + now, type: 'barrier', x: p.x - Math.sin(p.yaw) * 3.5, y: p.y + 1.2, z: p.z - Math.cos(p.yaw) * 3.5, w: 4.5, h: 2.5, d: 1.0, expiresAt: now + 7000 });
+            } else if (p.heroId === 'volt') {
+              p.ammo.primary = hero.primary.mag;
+            }
+          } else if (data === 'ultimate' && p.ultCharge >= p.ultMax) {
+            p.ultCharge = 0;
+            p.ultActiveUntil = now + hero.ultimate.durationMs;
+            Object.values(this.room.players).forEach((t) => {
+              if (t.id === p.id) return;
+              if (p.heroId === 'vex') t.revealedUntil = now + 6000;
+              if (p.heroId === 'krosh') { p.armor = 50; t.slowedUntil = now + 3500; }
+              if (p.heroId === 'cipher') t.blackoutUntil = now + 8000;
+              if (p.heroId === 'bastion' && Math.hypot(t.x - p.x, t.z - p.z) <= 15) this.applyDmg(p, t, 45, 'Lockdown Array', false);
+            });
+            if (p.heroId === 'volt' && p.history.length > 0) {
+              const snap = p.history[0];
+              p.x = snap.x; p.y = snap.y; p.z = snap.z; p.hp = Math.max(p.hp, snap.hp);
+              if (pid === this.id) { localPlayer.x = p.x; localPlayer.y = p.y; localPlayer.z = p.z; }
+            }
+          }
+        } else if (event === 'fireWeapon') {
+          const w = hero[p.weaponSlot];
+          if (now < p.reloadingUntil || p.ammo[p.weaponSlot] <= 0) return;
+          p.ammo[p.weaponSlot]--;
+          this.emitNoise(p, w.noiseRadius, 'gunfire');
+          const pellets = w.pellets || 1;
+          for (let i = 0; i < pellets; i++) {
+            const sp = p.stance === 'crouch' ? w.spread * 0.55 : w.spread;
+            const rx = data.dir.x + (Math.random() - 0.5) * sp;
+            const ry = data.dir.y + (Math.random() - 0.5) * sp;
+            const rz = data.dir.z + (Math.random() - 0.5) * sp;
+            const len = Math.hypot(rx, ry, rz) || 1;
+            this.raycastShot(p, w, data.origin, { x: rx / len, y: ry / len, z: rz / len }, 1.0);
+          }
+        }
+      }
+
+      emitNoise(source, baseRadius, type) {
+        const now = Date.now();
+        if (type === 'footstep' && source.heroId === 'sable' && (now < source.ultActiveUntil || now < source.defActiveUntil)) return;
+        const map = MAPS[this.room.mapId];
+        let mat = map.floorMat;
+        map.structures.forEach((s) => {
+          if ((s.walkable || s.ramp) && Math.abs(source.x - s.x) <= s.w / 2 && Math.abs(source.z - s.z) <= s.d / 2 && source.y >= s.y - 1.5) mat = s.mat;
+        });
+        const eff = baseRadius * (SURFACE_MULT[mat] || 1.0);
+        Object.values(this.room.players).forEach((listener) => {
+          if (listener.id === source.id || listener.isBot) return;
+          const d = Math.hypot(listener.x - source.x, listener.z - source.z);
+          if (d <= eff) {
+            this.sendTo(listener.id, 'acousticPing', {
+              x: source.x, y: source.y, z: source.z, surface: mat, type, intensity: Math.max(0.25, 1 - d / eff)
+            });
+          }
+        });
+      }
+
+      intersectAABB(orig, dir, box) {
+        const minX = box.x - box.w / 2, maxX = box.x + box.w / 2;
+        const minY = box.y - box.h / 2, maxY = box.y + box.h / 2;
+        const minZ = box.z - box.d / 2, maxZ = box.z + box.d / 2;
+        let tmin = -Infinity, tmax = Infinity;
+        const axes = [[orig.x, dir.x, minX, maxX], [orig.y, dir.y, minY, maxY], [orig.z, dir.z, minZ, maxZ]];
+        for (const [o, d, mn, mx] of axes) {
+          if (Math.abs(d) > 1e-6) {
+            let t1 = (mn - o) / d, t2 = (mx - o) / d;
+            if (t1 > t2) [t1, t2] = [t2, t1];
+            tmin = Math.max(tmin, t1); tmax = Math.min(tmax, t2);
+            if (tmin > tmax) return null;
+          } else if (o < mn || o > mx) return null;
+        }
+        return tmax >= 0 ? (tmin >= 0 ? tmin : tmax) : null;
+      }
+
+      raycastShot(shooter, weapon, orig, dir, mult) {
+        const map = MAPS[this.room.mapId];
+        let wallDist = Infinity;
+        const blocks = [...map.structures, ...this.room.doors.filter((d) => !d.open), ...this.room.deployables.filter((d) => d.type === 'barrier')];
+        blocks.forEach((b) => {
+          const t = this.intersectAABB(orig, dir, b);
+          if (t !== null && t < wallDist) wallDist = t;
+        });
+
+        let hitTarget = null, hitDist = Infinity, head = false;
+        Object.values(this.room.players).forEach((t) => {
+          if (t.id === shooter.id) return;
+          const box = { x: t.x, y: t.y + 0.9, z: t.z, w: 1.0, h: 1.8, d: 1.0 };
+          const d = this.intersectAABB(orig, dir, box);
+          if (d !== null && d < hitDist) {
+            hitDist = d; hitTarget = t;
+            head = (orig.y + dir.y * d) >= t.y + 1.4;
+          }
+        });
+
+        const now = Date.now();
+        if (hitTarget && (hitDist < wallDist || (weapon.pattern === 'wallbang' && hitDist < wallDist + 2.5))) {
+          if (now < hitTarget.defActiveUntil && ['vex', 'krosh', 'volt'].includes(hitTarget.heroId)) {
+            this.broadcast('hitMarker', { shooterId: shooter.id, blocked: true });
+            return;
+          }
+          const wb = hitDist >= wallDist ? 0.6 : 1.0;
+          const dmg = Math.round(weapon.dmg * (head ? weapon.headMult : 1.0) * mult * wb);
+          this.applyDmg(shooter, hitTarget, dmg, weapon.name, head);
+        }
+      }
+
+      applyDmg(attacker, victim, dmg, wepName, isHeadshot) {
+        attacker.ultCharge = Math.min(attacker.ultMax, attacker.ultCharge + dmg * 2.2);
+        victim.ultCharge = Math.min(victim.ultMax, victim.ultCharge + dmg * 1.2);
+        if (victim.armor > 0) {
+          const abs = Math.min(victim.armor, dmg);
+          victim.armor -= abs; dmg -= abs;
+        }
+        victim.hp -= dmg;
+        this.broadcast('hitMarker', { shooterId: attacker.id, isHeadshot, blocked: false });
+
+        if (victim.hp <= 0) {
+          attacker.kills++; victim.deaths++;
+          victim.stocks = Math.max(0, victim.stocks - 1);
+          this.broadcast('killFeed', { killer: attacker.name, victim: victim.name, weapon: wepName, isHeadshot });
+
+          if (this.room.mode === 'stock' && victim.stocks <= 0) {
+            this.room.over = true;
+            this.broadcast('matchOver', { winner: attacker.name, reason: 'Opponent Stocks Depleted' });
+            return;
+          }
+          const map = MAPS[this.room.mapId];
+          const s0 = map.spawns[0], s1 = map.spawns[1];
+          const sp = Math.hypot(attacker.x - s0.x, attacker.z - s0.z) > Math.hypot(attacker.x - s1.x, attacker.z - s1.z) ? s0 : s1;
+          victim.hp = victim.maxHp; victim.armor = 0;
+          victim.x = sp.x; victim.y = sp.y; victim.z = sp.z;
+          victim.ammo.primary = HEROES[victim.heroId].primary.mag;
+          victim.ammo.secondary = HEROES[victim.heroId].secondary.mag;
+          if (victim.id === this.id) { localPlayer.x = sp.x; localPlayer.y = sp.y; localPlayer.z = sp.z; }
+        }
+      }
+
+      startServerLoops() {
+        setInterval(() => {
+          if (!this.room || this.room.over) return;
+          const now = Date.now();
+          this.room.deployables = this.room.deployables.filter((d) => d.expiresAt > now);
+
+          Object.values(this.room.players).forEach((p) => {
+            p.ultCharge = Math.min(p.ultMax, p.ultCharge + 0.65);
+            if (p.isBot) {
+              const target = this.room.players[this.id];
+              if (!target) return;
+              const dx = target.x - p.x, dz = target.z - p.z;
+              const dist = Math.hypot(dx, dz) || 1;
+              p.yaw = Math.atan2(-dx, -dz);
+              if (dist > 13) {
+                p.x += (dx / dist) * 0.21;
+                p.z += (dz / dist) * 0.21;
+                if (Math.random() < 0.09) this.emitNoise(p, 15, 'footstep');
+              } else {
+                const st = Math.sin(now * 0.004) * 0.16;
+                p.x += (-dz / dist) * st;
+                p.z += (dx / dist) * st;
+              }
+              const h = HEROES[p.heroId];
+              if (now - p.lastShotAt > Math.max(480, h.primary.fireRateMs * 1.4)) {
+                p.lastShotAt = now;
+                this.emitNoise(p, h.primary.noiseRadius, 'gunfire');
+                this.raycastShot(p, h.primary, { x: p.x, y: p.y + 1.5, z: p.z }, { x: dx / dist, y: (target.y - p.y) / dist, z: dz / dist }, 0.7);
+              }
+            }
+          });
+          this.broadcast('worldTick', { players: this.room.players, deployables: this.room.deployables });
+        }, 50);
+
+        setInterval(() => {
+          if (!this.room || this.room.over || this.room.mode !== 'timer') return;
+          this.room.timeRemaining--;
+          this.broadcast('timerSync', this.room.timeRemaining);
+          if (this.room.timeRemaining <= 0) {
+            this.room.over = true;
+            const sorted = Object.values(this.room.players).sort((a, b) => b.kills - a.kills);
+            this.broadcast('matchOver', { winner: sorted[0].name, reason: 'Time Limit Reached' });
+          }
+        }, 1000);
+      }
+    }
+
+    const socket = new HybridSocketAdapter();
+
+    // ========================================================================
+    // 3. THREE.JS 3D CLIENT & CROSS-PLATFORM INPUT (PC + iPAD)
+    // ========================================================================
+    let catalog = { heroes: HEROES, maps: MAPS };
+    let selectedHero = 'vex';
+    let selectedMap = 'foundry';
+
+    const isTouchCapable = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+    let showTouchHUD = isTouchCapable;
+
+    let roomState = null;
+    let doorMeshes = {};
+    let opponentMeshes = {};
+    let deployableMeshes = {};
+    let acousticRings = [];
+
+    const canvas = document.getElementById('gameCanvas');
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 150);
+
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    const localPlayer = {
+      x: 0, y: 0, z: 0, vy: 0, yaw: 0, pitch: 0, recoilOffset: 0,
+      stance: 'stand', crouchToggle: false, grounded: true,
+      keys: {}, firing: false, lastFireTime: 0,
+      joyX: 0, joyY: 0, joyMag: 0
+    };
+
+    socket.on('initCatalog', (data) => {
+      catalog = data;
+      const heroGrid = document.getElementById('heroGrid');
+      heroGrid.innerHTML = '';
+      Object.values(catalog.heroes).forEach((h) => {
+        const div = document.createElement('div');
+        div.className = 'tile' + (h.id === selectedHero ? ' active' : '');
+        div.innerHTML = `<strong>${h.name}</strong><span style="color:#38bdf8">${h.role}</span><br/>
+          <small>1° ${h.primary.name}<br/>2° ${h.secondary.name}<br/>
+          E: ${h.defensive.name}<br/>Q: ${h.ultimate.name}</small>`;
+        div.onclick = () => {
+          selectedHero = h.id;
+          document.querySelectorAll('#heroGrid .tile').forEach((el) => el.classList.remove('active'));
+          div.classList.add('active');
+        };
+        heroGrid.appendChild(div);
+      });
+
+      const mapGrid = document.getElementById('mapGrid');
+      mapGrid.innerHTML = '';
+      Object.values(catalog.maps).forEach((m) => {
+        const div = document.createElement('div');
+        div.className = 'tile' + (m.id === selectedMap ? ' active' : '');
+        div.innerHTML = `<strong>${m.name}</strong><small style="color:#94a3b8">${m.subtitle}</small>`;
+        div.onclick = () => {
+          selectedMap = m.id;
+          document.querySelectorAll('#mapGrid .tile').forEach((el) => el.classList.remove('active'));
+          div.classList.add('active');
+        };
+        mapGrid.appendChild(div);
+      });
+    });
+
+    function syncTouchHUDVisibility() {
+      document.getElementById('touchControls').style.display = showTouchHUD ? 'block' : 'none';
+      document.getElementById('touchToggleBtn').textContent = `TOUCH HUD: ${showTouchHUD ? 'ON' : 'OFF'}`;
+    }
+
+    document.getElementById('touchToggleBtn').onclick = (e) => {
+      e.stopPropagation();
+      showTouchHUD = !showTouchHUD;
+      syncTouchHUDVisibility();
+    };
+    document.getElementById('lobbyReturnBtn').onclick = () => location.reload();
+
+    document.getElementById('deployBtn').onclick = () => {
+      document.getElementById('lobby').style.display = 'none';
+      document.getElementById('hud').style.display = 'block';
+      syncTouchHUDVisibility();
+      if (!showTouchHUD && canvas.requestPointerLock) canvas.requestPointerLock();
+
+      socket.emit('joinMatch', {
+        roomId: document.getElementById('roomId').value,
+        playerName: document.getElementById('playerName').value,
+        heroId: selectedHero,
+        mapId: selectedMap,
+        mode: document.getElementById('modeSelect').value,
+        spawnBot: document.getElementById('botToggle').checked
+      });
+    };
+
+    function buildArenaScene(mapId, doors) {
+      while (scene.children.length > 0) scene.remove(scene.children[0]);
+      doorMeshes = {}; opponentMeshes = {}; deployableMeshes = {};
+      const map = catalog.maps[mapId];
+      scene.background = new THREE.Color(map.fogColor);
+      scene.fog = new THREE.FogExp2(map.fogColor, 0.018);
+
+      scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+      const dir = new THREE.DirectionalLight(0xffffff, 0.85);
+      dir.position.set(20, 40, 15);
+      scene.add(dir);
+
+      const floor = new THREE.Mesh(new THREE.PlaneGeometry(60, 60), new THREE.MeshLambertMaterial({ color: map.ambientColor }));
+      floor.rotation.x = -Math.PI / 2;
+      scene.add(floor);
+
+      map.structures.forEach((s) => {
+        const mesh = new THREE.Mesh(new THREE.BoxGeometry(s.w, s.h, s.d), new THREE.MeshLambertMaterial({ color: s.color }));
+        mesh.position.set(s.x, s.y, s.z);
+        scene.add(mesh);
+      });
+
+      doors.forEach((d) => {
+        const mesh = new THREE.Mesh(new THREE.BoxGeometry(d.w, d.h, d.d), new THREE.MeshLambertMaterial({ color: 0xeab308 }));
+        mesh.position.set(d.x, d.open ? d.y + 4.4 : d.y, d.z);
+        scene.add(mesh);
+        doorMeshes[d.id] = mesh;
+      });
+    }
+
+    socket.on('matchState', (state) => {
+      roomState = state;
+      buildArenaScene(state.mapId, state.doors);
+      const me = state.players[socket.id];
+      if (me) {
+        localPlayer.x = me.x; localPlayer.y = me.y; localPlayer.z = me.z; localPlayer.yaw = me.yaw;
+      }
+      document.getElementById('hudMapName').textContent = catalog.maps[state.mapId].name.toUpperCase();
+    });
+
+    socket.on('doorState', (doors) => {
+      if (!roomState) return;
+      roomState.doors = doors;
+      doors.forEach((d) => { if (doorMeshes[d.id]) doorMeshes[d.id].position.y = d.open ? d.y + 4.4 : d.y; });
+    });
+
+    socket.on('worldTick', ({ players, deployables }) => {
+      if (!roomState) return;
+      roomState.players = players;
+      const now = Date.now();
+      const me = players[socket.id];
+      if (me) updateHUD(me, players, now);
+
+      Object.values(players).forEach((p) => {
+        if (p.id === socket.id) return;
+        if (!opponentMeshes[p.id]) {
+          const group = new THREE.Group();
+          const body = new THREE.Mesh(new THREE.BoxGeometry(0.9, 1.4, 0.9), new THREE.MeshLambertMaterial({ color: catalog.heroes[p.heroId].color }));
+          body.position.y = 0.7;
+          const head = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.45, 0.5), new THREE.MeshLambertMaterial({ color: 0xf8fafc }));
+          head.position.y = 1.62;
+          group.add(body, head);
+          scene.add(group);
+          opponentMeshes[p.id] = { group, body };
+        }
+        const m = opponentMeshes[p.id];
+        m.group.position.set(p.x, p.y, p.z);
+        m.group.rotation.y = p.yaw;
+        const cloaked = p.heroId === 'sable' && now < p.defActiveUntil && now >= p.revealedUntil;
+        m.body.material.transparent = true;
+        m.body.material.opacity = cloaked ? 0.18 : 1.0;
+        m.body.material.wireframe = now < p.revealedUntil;
+      });
+
+      const activeIds = new Set(deployables.map((d) => d.id));
+      Object.keys(deployableMeshes).forEach((id) => {
+        if (!activeIds.has(id)) { scene.remove(deployableMeshes[id]); delete deployableMeshes[id]; }
+      });
+      deployables.forEach((d) => {
+        if (!deployableMeshes[d.id]) {
+          const mesh = new THREE.Mesh(
+            new THREE.BoxGeometry(d.w, d.h, d.d),
+            new THREE.MeshLambertMaterial({ color: d.type === 'smoke' ? 0x94a3b8 : 0xfbbf24, transparent: true, opacity: 0.82 })
+          );
+          mesh.position.set(d.x, d.y, d.z);
+          scene.add(mesh);
+          deployableMeshes[d.id] = mesh;
+        }
+      });
+    });
+
+    socket.on('acousticPing', (ping) => acousticRings.push({ ...ping, createdAt: Date.now() }));
+
+    socket.on('hitMarker', ({ shooterId, isHeadshot, blocked }) => {
+      if (shooterId === socket.id) {
+        const el = document.getElementById('hitIndicator');
+        el.textContent = blocked ? '🛡️' : (isHeadshot ? '⌖' : '✕');
+        el.style.color = blocked ? '#38bdf8' : (isHeadshot ? '#facc15' : '#f43f5e');
+        el.style.opacity = '1';
+        setTimeout(() => { el.style.opacity = '0'; }, 140);
+      }
+    });
+
+    socket.on('killFeed', ({ killer, victim, weapon, isHeadshot }) => {
+      const feed = document.getElementById('killFeed');
+      const div = document.createElement('div');
+      div.className = 'feed-item';
+      div.textContent = `${killer} [${weapon}${isHeadshot ? ' • HEADSHOT' : ''}] ${victim}`;
+      feed.prepend(div);
+      setTimeout(() => div.remove(), 4500);
+    });
+
+    socket.on('matchOver', ({ winner, reason }) => {
+      alert(`MATCH COMPLETE\nWinner: ${winner}\nReason: ${reason}`);
+      location.reload();
+    });
+
+    socket.on('timerSync', (t) => { if (roomState) roomState.timeRemaining = t; });
+
+    function updateHUD(me, players, now) {
+      const hero = catalog.heroes[me.heroId];
+      const w = hero[me.weaponSlot];
+      document.getElementById('hudHeroName').textContent = hero.name;
+      document.getElementById('hudHpText').textContent = `${Math.max(0, me.hp)}${me.armor ? ' +' + me.armor : ''} HP`;
+      document.getElementById('hudHpFill').style.width = `${Math.max(0, (me.hp / me.maxHp) * 100)}%`;
+      document.getElementById('hudWeaponName').textContent = w.name;
+      document.getElementById('hudAmmo').textContent = now < me.reloadingUntil ? 'RELOADING...' : `${me.ammo[me.weaponSlot]} / ${w.mag}`;
+
+      const defRem = Math.max(0, Math.ceil((me.defCdUntil - now) / 1000));
+      document.getElementById('hudDefStatus').textContent = `[E] ${hero.defensive.name}: ${defRem > 0 ? defRem + 's' : 'READY'}`;
+      const ultPct = Math.min(100, Math.floor((me.ultCharge / me.ultMax) * 100));
+      document.getElementById('hudUltStatus').textContent = `[Q] ${hero.ultimate.name}: ${ultPct >= 100 ? 'READY' : ultPct + '%'}`;
+      document.getElementById('blackoutBanner').style.display = now < me.blackoutUntil ? 'block' : 'none';
+
+      const opp = Object.values(players).find((p) => p.id !== socket.id);
+      if (roomState.mode === 'stock') {
+        document.getElementById('hudModeStat').textContent = `STOCKS: ${me.stocks} vs ${opp ? opp.stocks : 3}`;
+      } else {
+        const m = Math.floor(roomState.timeRemaining / 60);
+        const s = String(roomState.timeRemaining % 60).padStart(2, '0');
+        document.getElementById('hudModeStat').textContent = `CLOCK: ${m}:${s}`;
+      }
+      document.getElementById('hudScore').textContent = `ELIMS: ${me.kills} - ${opp ? opp.kills : 0}`;
+    }
+
+    // Desktop Input
+    window.addEventListener('keydown', (e) => {
+      const k = e.key.toLowerCase();
+      localPlayer.keys[k] = true;
+      if (k === '1') socket.emit('switchWeapon', 'primary');
+      if (k === '2') socket.emit('switchWeapon', 'secondary');
+      if (k === 'r') socket.emit('reloadWeapon');
+      if (k === 'e') socket.emit('useAbility', 'defensive');
+      if (k === 'q') socket.emit('useAbility', 'ultimate');
+      if (k === 'f') socket.emit('toggleDoor');
+      if (k === ' ' && localPlayer.grounded) { localPlayer.vy = 0.16; localPlayer.grounded = false; }
+    });
+    window.addEventListener('keyup', (e) => { localPlayer.keys[e.key.toLowerCase()] = false; });
+
+    window.addEventListener('mousemove', (e) => {
+      if (document.pointerLockElement !== canvas) return;
+      localPlayer.yaw -= e.movementX * 0.0022;
+      localPlayer.pitch = Math.max(-1.4, Math.min(1.4, localPlayer.pitch - e.movementY * 0.0022));
+    });
+
+    canvas.addEventListener('mousedown', (e) => {
+      if (showTouchHUD) return;
+      if (document.pointerLockElement !== canvas && canvas.requestPointerLock) { canvas.requestPointerLock(); return; }
+      if (e.button === 0) { localPlayer.firing = true; attemptFire(); }
+    });
+    window.addEventListener('mouseup', () => { if (!showTouchHUD) localPlayer.firing = false; });
+
+    // iPad Multi-Touch Twin-Stick Input
+    const joystickZone = document.getElementById('joystickZone');
+    const joystickKnob = document.getElementById('joystickKnob');
+    let joyTouchId = null;
+
+    function updateJoystick(cxClient, cyClient) {
+      const rect = joystickZone.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2, cy = rect.top + rect.height / 2;
+      const maxR = rect.width / 2 - 18;
+      let dx = cxClient - cx, dy = cyClient - cy;
+      const dist = Math.hypot(dx, dy);
+      if (dist > maxR) { dx = (dx / dist) * maxR; dy = (dy / dist) * maxR; }
+      joystickKnob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+      localPlayer.joyX = dx / maxR;
+      localPlayer.joyY = -dy / maxR;
+      localPlayer.joyMag = Math.min(1, dist / maxR);
+    }
+
+    joystickZone.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      const t = e.changedTouches[0];
+      joyTouchId = t.identifier;
+      updateJoystick(t.clientX, t.clientY);
+    }, { passive: false });
+
+    joystickZone.addEventListener('touchmove', (e) => {
+      e.preventDefault();
+      for (const t of e.changedTouches) if (t.identifier === joyTouchId) updateJoystick(t.clientX, t.clientY);
+    }, { passive: false });
+
+    function endJoy(e) {
+      for (const t of e.changedTouches) {
+        if (t.identifier === joyTouchId) {
+          joyTouchId = null; localPlayer.joyX = 0; localPlayer.joyY = 0; localPlayer.joyMag = 0;
+          joystickKnob.style.transform = 'translate(-50%, -50%)';
+        }
+      }
+    }
+    joystickZone.addEventListener('touchend', endJoy);
+    joystickZone.addEventListener('touchcancel', endJoy);
+
+    const lookZone = document.getElementById('lookZone');
+    let lookTouchId = null, lastLX = 0, lastLY = 0;
+
+    lookZone.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      const t = e.changedTouches[0];
+      lookTouchId = t.identifier; lastLX = t.clientX; lastLY = t.clientY;
+    }, { passive: false });
+
+    lookZone.addEventListener('touchmove', (e) => {
+      e.preventDefault();
+      for (const t of e.changedTouches) {
+        if (t.identifier === lookTouchId) {
+          localPlayer.yaw -= (t.clientX - lastLX) * 0.0045;
+          localPlayer.pitch = Math.max(-1.4, Math.min(1.4, localPlayer.pitch - (t.clientY - lastLY) * 0.0045));
+          lastLX = t.clientX; lastLY = t.clientY;
+        }
+      }
+    }, { passive: false });
+
+    lookZone.addEventListener('touchend', (e) => {
+      for (const t of e.changedTouches) if (t.identifier === lookTouchId) lookTouchId = null;
+    });
+
+    function bindBtn(id, downFn, upFn) {
+      const b = document.getElementById(id);
+      b.addEventListener('touchstart', (e) => { e.preventDefault(); e.stopPropagation(); downFn(); }, { passive: false });
+      if (upFn) {
+        b.addEventListener('touchend', (e) => { e.preventDefault(); e.stopPropagation(); upFn(); }, { passive: false });
+        b.addEventListener('touchcancel', (e) => { e.preventDefault(); e.stopPropagation(); upFn(); }, { passive: false });
+      }
+    }
+    bindBtn('btnFire', () => { localPlayer.firing = true; attemptFire(); }, () => { localPlayer.firing = false; });
+    bindBtn('btnCrouch', () => {
+      localPlayer.crouchToggle = !localPlayer.crouchToggle;
+      document.getElementById('btnCrouch').classList.toggle('active-toggle', localPlayer.crouchToggle);
+    });
+    bindBtn('btnJump', () => { if (localPlayer.grounded) { localPlayer.vy = 0.16; localPlayer.grounded = false; } });
+    bindBtn('btnReload', () => socket.emit('reloadWeapon'));
+    bindBtn('btnSwap', () => {
+      if (!roomState || !roomState.players[socket.id]) return;
+      const cur = roomState.players[socket.id].weaponSlot;
+      socket.emit('switchWeapon', cur === 'primary' ? 'secondary' : 'primary');
+    });
+    bindBtn('btnDef', () => socket.emit('useAbility', 'defensive'));
+    bindBtn('btnUlt', () => socket.emit('useAbility', 'ultimate'));
+    bindBtn('btnDoor', () => socket.emit('toggleDoor'));
+
+    function attemptFire() {
+      if (!roomState || !roomState.players[socket.id]) return;
+      const me = roomState.players[socket.id];
+      const hero = catalog.heroes[me.heroId];
+      const w = hero[me.weaponSlot];
+      const now = Date.now();
+      if (now - localPlayer.lastFireTime < w.fireRateMs || now < me.reloadingUntil || me.ammo[me.weaponSlot] <= 0) return;
+      localPlayer.lastFireTime = now;
+
+      const sendShot = () => {
+        const dir = new THREE.Vector3(0, 0, -1).applyEuler(new THREE.Euler(localPlayer.pitch + localPlayer.recoilOffset, localPlayer.yaw, 0, 'YXZ'));
+        socket.emit('fireWeapon', {
+          origin: { x: localPlayer.x, y: localPlayer.y + (localPlayer.stance === 'crouch' ? 1.0 : 1.55), z: localPlayer.z },
+          dir: { x: dir.x, y: dir.y, z: dir.z }
+        });
+        localPlayer.recoilOffset = Math.min(0.25, localPlayer.recoilOffset + w.recoilPitch);
+        localPlayer.yaw += (Math.random() - 0.5) * w.recoilYaw;
+      };
+      if (w.pattern === 'burst') { sendShot(); setTimeout(sendShot, 55); setTimeout(sendShot, 110); }
+      else sendShot();
+    }
+
+    const compassCtx = document.getElementById('acousticCompass').getContext('2d');
+    function animate() {
+      requestAnimationFrame(animate);
+      if (!roomState || !roomState.players[socket.id]) return;
+      const me = roomState.players[socket.id];
+      const hero = catalog.heroes[me.heroId];
+
+      const isCrouching = localPlayer.keys['c'] || localPlayer.keys['control'] || localPlayer.crouchToggle;
+      const isTouchWalk = localPlayer.joyMag > 0.05 && localPlayer.joyMag < 0.55;
+
+      if (isCrouching) {
+        localPlayer.stance = 'crouch';
+        document.getElementById('hudStance').textContent = 'CROUCH (0m Silent)';
+      } else if (localPlayer.keys['shift'] || isTouchWalk) {
+        localPlayer.stance = 'walk';
+        document.getElementById('hudStance').textContent = 'WALK (4m Quiet)';
+      } else {
+        localPlayer.stance = 'stand';
+        document.getElementById('hudStance').textContent = 'SPRINT (18m Noise)';
+      }
+
+      let spd = hero.speed * 0.016;
+      if (localPlayer.stance === 'walk') spd *= 0.52;
+      if (localPlayer.stance === 'crouch') spd *= 0.38;
+      if (Date.now() < me.slowedUntil) spd *= 0.65;
+      if (me.heroId === 'sable' && Date.now() < me.ultActiveUntil) spd *= 1.25;
+
+      let fwd = localPlayer.joyY, str = localPlayer.joyX;
+      if (localPlayer.keys['w']) fwd = 1;
+      if (localPlayer.keys['s']) fwd = -1;
+      if (localPlayer.keys['a']) str = -1;
+      if (localPlayer.keys['d']) str = 1;
+
+      if (Math.abs(fwd) > 0.02 || Math.abs(str) > 0.02) {
+        const a = localPlayer.yaw;
+        const nx = localPlayer.x + (-Math.sin(a) * fwd + Math.cos(a) * str) * spd;
+        const nz = localPlayer.z + (-Math.cos(a) * fwd - Math.sin(a) * str) * spd;
+        localPlayer.x = Math.max(-28.5, Math.min(28.5, nx));
+        localPlayer.z = Math.max(-28.5, Math.min(28.5, nz));
+      }
+
+      const map = catalog.maps[roomState.mapId];
+      let targetFloor = 0;
+      map.structures.forEach((s) => {
+        if ((s.walkable || s.ramp) && Math.abs(localPlayer.x - s.x) <= s.w / 2 && Math.abs(localPlayer.z - s.z) <= s.d / 2) {
+          targetFloor = Math.max(targetFloor, s.ramp ? 2.0 : s.y + s.h / 2);
+        }
+      });
+
+      localPlayer.y += localPlayer.vy;
+      if (localPlayer.y > targetFloor) localPlayer.vy -= 0.008;
+      else { localPlayer.y = targetFloor; localPlayer.vy = 0; localPlayer.grounded = true; }
+
+      localPlayer.recoilOffset *= 0.88;
+      if (localPlayer.firing) {
+        const w = hero[me.weaponSlot];
+        if (w.pattern.includes('auto') || w.pattern === 'ramping' || w.pattern === 'wallbang') attemptFire();
+      }
+
+      camera.position.set(localPlayer.x, localPlayer.y + (localPlayer.stance === 'crouch' ? 1.0 : 1.6), localPlayer.z);
+      camera.rotation.order = 'YXZ';
+      camera.rotation.y = localPlayer.yaw;
+      camera.rotation.x = localPlayer.pitch + localPlayer.recoilOffset;
+
+      socket.emit('moveUpdate', {
+        x: localPlayer.x, y: localPlayer.y, z: localPlayer.z,
+        yaw: localPlayer.yaw, pitch: localPlayer.pitch, stance: localPlayer.stance
+      });
+
+      compassCtx.clearRect(0, 0, 220, 220);
+      const now = Date.now();
+      acousticRings = acousticRings.filter((r) => now - r.createdAt < 900);
+      acousticRings.forEach((r) => {
+        const angle = Math.atan2(r.x - localPlayer.x, r.z - localPlayer.z) - localPlayer.yaw + Math.PI;
+        const alpha = (1 - (now - r.createdAt) / 900) * r.intensity;
+        compassCtx.save();
+        compassCtx.translate(110, 110);
+        compassCtx.rotate(-angle);
+        compassCtx.beginPath();
+        compassCtx.arc(0, 0, 85, -Math.PI / 2 - 0.35, -Math.PI / 2 + 0.35);
+        compassCtx.strokeStyle = r.type === 'gunfire' ? `rgba(244,63,94,${alpha})` : `rgba(56,189,248,${alpha})`;
+        compassCtx.lineWidth = 6;
+        compassCtx.stroke();
+        compassCtx.restore();
+      });
+
+      renderer.render(scene, camera);
+    }
+    animate();
+  </script>
+</body>
+</html>
