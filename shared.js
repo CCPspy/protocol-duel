@@ -297,6 +297,10 @@
   // ==========================================================================
   // RESPAWN & AI DUELIST (run by whichever side is authoritative: Node server or P2P host)
   // ==========================================================================
+  // Bump together with CLIENT_BUILD and the shared.js?v= query in index.html on every release,
+  // so a cached page can never run against a mismatched copy of this file.
+  const GAME_VERSION = 5;
+
   const RESPAWN_MS = 3000;
 
   // ==========================================================================
@@ -358,26 +362,66 @@
     return best;
   }
 
-  const BOT = {
-    REACTION_MS: 700,        // Delay between first seeing you and pulling the trigger
-    REACQUIRE_MS: 350,       // Shorter delay if it only lost sight of you briefly
-    MIN_FIRE_GAP_MS: 950,    // Never shoots faster than this...
-    FIRE_GAP_MULT: 2.4,      // ...or than 2.4x the weapon's own fire interval
-    FIRE_JITTER_MS: 450,     // Random extra delay so its rhythm isn't robotic
-    MAX_RANGE: 34,           // Won't engage beyond this distance
-    NEAR_RANGE: 10,          // Backs off when closer than this...
-    FAR_RANGE: 18,           // ...and closes in when farther than this
-    BASE_SPREAD: 0.07,       // Much looser than a player standing still
-    RANGE_SPREAD: 0.0025,    // Extra spread per metre of distance
-    MOVING_TARGET_SPREAD: 0.06,
-    DMG_MULT: 0.5,
-    PELLET_DMG_MULT: 0.5,    // Extra cut for shotguns, which fire many pellets per shot
-    AIM_HEIGHT: 1.0          // Aims at the chest, not the head
+  // AI difficulty presets. 'hard' reproduces the original AI exactly (eye-level aim, so most hits are
+  // headshots; no reaction delay, endless ammo, rushes in close); 'veryEasy' is the toned-down duellist.
+  const BOT_DIFFICULTIES = {
+    veryEasy: {
+      label: 'Very Easy',
+      reactionMs: 700,       // Delay between first seeing you and pulling the trigger
+      reacquireMs: 350,      // Shorter delay if it only lost sight of you briefly
+      minFireGapMs: 950,     // Never shoots faster than this...
+      fireGapMult: 2.4,      // ...or than this multiple of the weapon's own fire interval
+      fireJitterMs: 450,     // Random extra delay so its rhythm isn't robotic
+      maxRange: 34,          // Won't engage beyond this distance
+      baseSpread: 0.07,
+      rangeSpread: 0.0025,   // Extra spread per metre of distance
+      movingSpread: 0.06,    // Extra spread when you're strafing
+      dmgMult: 0.5,
+      pelletDmgMult: 0.5,    // Extra cut for shotguns, which fire many pellets per shot
+      aimHeight: 1.0,        // Chest
+      usesAmmo: true,
+      movement: 'duel', nearRange: 10, farRange: 18
+    },
+    easy: {
+      label: 'Easy',
+      reactionMs: 500, reacquireMs: 250,
+      minFireGapMs: 800, fireGapMult: 2.0, fireJitterMs: 350,
+      maxRange: 40,
+      baseSpread: 0.058, rangeSpread: 0.0018, movingSpread: 0.045,
+      dmgMult: 0.55, pelletDmgMult: 0.6,
+      aimHeight: 1.1,
+      usesAmmo: true,
+      movement: 'duel', nearRange: 9, farRange: 16
+    },
+    medium: {
+      label: 'Medium',
+      reactionMs: 320, reacquireMs: 160,
+      minFireGapMs: 620, fireGapMult: 1.6, fireJitterMs: 200,
+      maxRange: 50,
+      baseSpread: 0.044, rangeSpread: 0.001, movingSpread: 0.03,
+      dmgMult: 0.62, pelletDmgMult: 0.7,
+      aimHeight: 1.25,       // Upper chest: spread turns some shots into headshots
+      usesAmmo: true,
+      movement: 'duel', nearRange: 8, farRange: 14
+    },
+    hard: {
+      label: 'Hard',
+      reactionMs: 0, reacquireMs: 0,
+      minFireGapMs: 550, fireGapMult: 1.5, fireJitterMs: 0,
+      maxRange: Infinity,
+      baseSpread: 0.045, rangeSpread: 0, movingSpread: 0,
+      dmgMult: 0.65, pelletDmgMult: 1, singlePellet: true,
+      aimHeight: 1.5,        // Eye level: above the headshot line
+      usesAmmo: false,
+      movement: 'rush'
+    }
   };
+  const DEFAULT_BOT_DIFFICULTY = 'medium';
 
   // hooks: { noise(p, radius, type), shoot(p, weapon, origin, dir, dmgMult) }
   function updateBot(room, p, now, hooks) {
     if (p.dead) return;
+    const cfg = BOT_DIFFICULTIES[p.botDifficulty] || BOT_DIFFICULTIES[DEFAULT_BOT_DIFFICULTY];
     const target = Object.values(room.players).find((h) => !h.isBot && !h.dead);
     const hero = HEROES[p.heroId];
     const w = hero.primary;
@@ -393,7 +437,7 @@
 
     // Line of sight check against all solid cover
     const eye = { x: p.x, y: p.y + 1.5, z: p.z };
-    const aimY = target.y + BOT.AIM_HEIGHT - eye.y;
+    const aimY = target.y + cfg.aimHeight - eye.y;
     const aimLen = Math.hypot(dx, aimY, dz) || 1;
     const aimDir = { x: dx / aimLen, y: aimY / aimLen, z: dz / aimLen };
     let wallBlocked = false;
@@ -402,16 +446,24 @@
       if (t !== null && t < aimLen) { wallBlocked = true; break; }
     }
 
-    // Hold a duelling distance instead of charging to point-blank: approach when far, back off when
-    // too close, strafe sideways in between; wander around cover when it has no sight line.
     const fx = dx / dist, fz = dz / dist;
     let moveX, moveZ;
-    if (wallBlocked) {
+    if (cfg.movement === 'rush') {
+      // Original behaviour: charge in, then circle-strafe tightly once within 11 m or blocked
+      moveX = fx * 0.19; moveZ = fz * 0.19;
+      if (wallBlocked || dist < 11) {
+        p.patrolAngle += 0.03;
+        moveX = Math.cos(p.patrolAngle) * 0.18 + fx * 0.08;
+        moveZ = Math.sin(p.patrolAngle) * 0.18 + fz * 0.08;
+      }
+    } else if (wallBlocked) {
+      // Wander around cover when it has no sight line
       p.patrolAngle += 0.03;
       moveX = Math.cos(p.patrolAngle) * 0.18 + fx * 0.08;
       moveZ = Math.sin(p.patrolAngle) * 0.18 + fz * 0.08;
     } else {
-      const radial = dist > BOT.FAR_RANGE ? 0.17 : (dist < BOT.NEAR_RANGE ? -0.14 : 0);
+      // Hold a duelling distance: approach when far, back off when too close, strafe in between
+      const radial = dist > cfg.farRange ? 0.17 : (dist < cfg.nearRange ? -0.14 : 0);
       if (!p.strafeFlipAt || now > p.strafeFlipAt) {
         p.strafeDir = Math.random() < 0.5 ? -1 : 1;
         p.strafeFlipAt = now + 900 + Math.random() * 1600;
@@ -430,9 +482,9 @@
     }
 
     // Reaction time: track when it acquired the target; brief occlusions get a shorter re-acquire
-    const canSee = !wallBlocked && dist <= BOT.MAX_RANGE;
+    const canSee = !wallBlocked && dist <= cfg.maxRange;
     if (canSee) {
-      if (!p.botSeenAt) p.botSeenAt = now + (now - (p.botLostAt || 0) < 1500 ? BOT.REACQUIRE_MS : BOT.REACTION_MS);
+      if (!p.botSeenAt) p.botSeenAt = now + (now - (p.botLostAt || 0) < 1500 ? cfg.reacquireMs : cfg.reactionMs);
     } else if (p.botSeenAt) {
       p.botSeenAt = 0; p.botLostAt = now;
     }
@@ -443,19 +495,22 @@
 
     if (!canSee || now < p.botSeenAt || p.reloadingUntil || now < (p.botNextShotAt || 0)) return;
 
-    if (p.ammo.primary <= 0) { p.reloadingUntil = now + w.reloadMs; return; }
-    p.ammo.primary--;
+    if (cfg.usesAmmo) {
+      if (p.ammo.primary <= 0) { p.reloadingUntil = now + w.reloadMs; return; }
+      p.ammo.primary--;
+    }
     p.lastShotAt = now;
-    p.botNextShotAt = now + Math.max(BOT.MIN_FIRE_GAP_MS, w.fireRateMs * BOT.FIRE_GAP_MULT) + Math.random() * BOT.FIRE_JITTER_MS;
+    p.botNextShotAt = now + Math.max(cfg.minFireGapMs, w.fireRateMs * cfg.fireGapMult) + Math.random() * cfg.fireJitterMs;
     hooks.noise(p, w.noiseRadius, 'gunfire');
 
-    const spread = BOT.BASE_SPREAD + dist * BOT.RANGE_SPREAD + (tSpeed > 0.1 ? BOT.MOVING_TARGET_SPREAD : 0);
-    for (let i = 0; i < (w.pellets || 1); i++) {
+    const spread = cfg.baseSpread + dist * cfg.rangeSpread + (tSpeed > 0.1 ? cfg.movingSpread : 0);
+    const pellets = cfg.singlePellet ? 1 : (w.pellets || 1);
+    const mult = cfg.dmgMult * (pellets > 1 ? cfg.pelletDmgMult : 1);
+    for (let i = 0; i < pellets; i++) {
       const rx = aimDir.x + (Math.random() - 0.5) * spread;
       const ry = aimDir.y + (Math.random() - 0.5) * spread;
       const rz = aimDir.z + (Math.random() - 0.5) * spread;
       const l = Math.hypot(rx, ry, rz) || 1;
-      const mult = BOT.DMG_MULT * ((w.pellets || 1) > 1 ? BOT.PELLET_DMG_MULT : 1);
       hooks.shoot(p, w, eye, { x: rx / l, y: ry / l, z: rz / l }, mult);
     }
   }
@@ -471,7 +526,7 @@
   }
 
   return {
-    HEROES, MAPS, SURFACE_MULT, PHYS, publicPlayers, RESPAWN_MS, BOT, pickRespawn, updateBot,
+    GAME_VERSION, HEROES, MAPS, SURFACE_MULT, PHYS, publicPlayers, RESPAWN_MS, BOT_DIFFICULTIES, DEFAULT_BOT_DIFFICULTY, pickRespawn, updateBot,
     ENDLESS_ROUND_SECS, MAP_ORDER, applyHero, rotateMap,
     getSolids, surfaceTop, getFloorElevation, getCeiling, collidesAt, slideMove,
     getSurfaceAt, intersectAABB, intersectSolid

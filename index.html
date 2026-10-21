@@ -211,7 +211,10 @@
     <div class="lobby-card">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
         <h1>PROTOCOL: DUEL // TACTICAL 1v1 FPS</h1>
-        <span id="netStatusBadge" style="font-size:12px; color:#38bdf8; font-weight:700;">ENGINE READY</span>
+        <span style="text-align:right;">
+          <span id="netStatusBadge" style="font-size:12px; color:#38bdf8; font-weight:700;">ENGINE READY</span>
+          <small style="display:block; font-size:10px; color:#64748b;">BUILD 5</small>
+        </span>
       </div>
 
       <div class="how-to-box">
@@ -242,6 +245,7 @@
         <label style="font-size:12px; display:flex; align-items:center; gap:5px; cursor:pointer;">
           <input type="checkbox" id="botToggle" checked /> Spawn AI Enemy
         </label>
+        <select id="difficultySelect" title="AI difficulty"></select>
         <button class="launch-btn" id="deployBtn" disabled>START MATCH</button>
       </div>
     </div>
@@ -344,9 +348,28 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
-  <script src="shared.js"></script>
+  <script src="shared.js?v=5"></script>
 
   <script>
+    // Static hosts (GitHub Pages) cache index.html and shared.js separately, so after a deploy a
+    // browser can briefly hold one new and one old file. Detect that and reload once for a matched pair.
+    const CLIENT_BUILD = 5; // Bump with GAME_VERSION in shared.js and the shared.js?v= query above
+    if (typeof GAME_VERSION === 'undefined' || GAME_VERSION !== CLIENT_BUILD) {
+      const key = 'pduel-build-reload-' + CLIENT_BUILD;
+      let alreadyTried = false;
+      try { alreadyTried = sessionStorage.getItem(key) === '1'; sessionStorage.setItem(key, '1'); } catch (e) {}
+      if (!alreadyTried) {
+        location.replace(location.pathname + '?build=' + CLIENT_BUILD + '&t=' + Date.now());
+      } else {
+        document.addEventListener('DOMContentLoaded', () => {
+          const b = document.getElementById('netStatusBadge');
+          b.textContent = 'GAME FILES OUT OF DATE: HARD-REFRESH (Cmd/Ctrl+Shift+R)';
+          b.style.color = '#f43f5e';
+        });
+      }
+      throw new Error('PROTOCOL: DUEL files are from different builds; reloading.');
+    }
+
     // ========================================================================
     // 1. PROCEDURAL WEB AUDIO SYNTHESIZER (Gunshots, Footsteps, Hit Dings)
     // ========================================================================
@@ -593,7 +616,9 @@
           if (data.spawnBot && humans.length === 0) {
             const pool = Object.keys(HEROES).filter((k) => k !== data.heroId);
             const bHero = pool[Math.floor(Math.random() * pool.length)];
-            this.room.players.bot_1 = this.createPlayer('bot_1', `AI // ${HEROES[bHero].name}`, bHero, map.spawns[1 - idx], true, 1 - idx);
+            const difficulty = BOT_DIFFICULTIES[data.botDifficulty] ? data.botDifficulty : DEFAULT_BOT_DIFFICULTY;
+            this.room.players.bot_1 = this.createPlayer('bot_1', `AI // ${HEROES[bHero].name} (${BOT_DIFFICULTIES[difficulty].label})`, bHero, map.spawns[1 - idx], true, 1 - idx);
+            this.room.players.bot_1.botDifficulty = difficulty;
           }
 
           this.sendMatchState();
@@ -968,6 +993,25 @@
       document.querySelectorAll('.hero-pick').forEach((b) => b.classList.toggle('active', b.dataset.hero === heroId));
     }
 
+    // AI difficulty picker (remembered per browser)
+    {
+      const sel = document.getElementById('difficultySelect');
+      Object.entries(BOT_DIFFICULTIES).forEach(([id, d]) => {
+        const opt = document.createElement('option');
+        opt.value = id;
+        opt.textContent = `AI: ${d.label}`;
+        sel.appendChild(opt);
+      });
+      let saved = null;
+      try { saved = localStorage.getItem('pduel-bot-difficulty'); } catch (e) {}
+      sel.value = BOT_DIFFICULTIES[saved] ? saved : DEFAULT_BOT_DIFFICULTY;
+      sel.onchange = () => { try { localStorage.setItem('pduel-bot-difficulty', sel.value); } catch (e) {} };
+      const toggle = document.getElementById('botToggle');
+      const syncDisabled = () => { sel.disabled = !toggle.checked; };
+      toggle.addEventListener('change', syncDisabled);
+      syncDisabled();
+    }
+
     function syncTouchHUD() {
       document.getElementById('touchControls').style.display = showTouchHUD ? 'block' : 'none';
       document.getElementById('touchToggleBtn').textContent = `TOUCH: ${showTouchHUD ? 'ON' : 'OFF'}`;
@@ -988,7 +1032,8 @@
         heroId: selectedHero,
         mapId: selectedMap,
         mode: document.getElementById('modeSelect').value,
-        spawnBot: document.getElementById('botToggle').checked
+        spawnBot: document.getElementById('botToggle').checked,
+        botDifficulty: document.getElementById('difficultySelect').value
       });
     };
 
