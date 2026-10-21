@@ -297,6 +297,10 @@
   // ==========================================================================
   // RESPAWN & AI DUELIST (run by whichever side is authoritative: Node server or P2P host)
   // ==========================================================================
+  // Bump together with CLIENT_BUILD and the shared.js?v= query in index.html on every release,
+  // so a cached page can never run against a mismatched copy of this file.
+  const GAME_VERSION = 4;
+
   const RESPAWN_MS = 3000;
 
   // ==========================================================================
@@ -471,7 +475,7 @@
   }
 
   return {
-    HEROES, MAPS, SURFACE_MULT, PHYS, publicPlayers, RESPAWN_MS, BOT, pickRespawn, updateBot,
+    GAME_VERSION, HEROES, MAPS, SURFACE_MULT, PHYS, publicPlayers, RESPAWN_MS, BOT, pickRespawn, updateBot,
     ENDLESS_ROUND_SECS, MAP_ORDER, applyHero, rotateMap,
     getSolids, surfaceTop, getFloorElevation, getCeiling, collidesAt, slideMove,
     getSurfaceAt, intersectAABB, intersectSolid
