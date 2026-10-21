@@ -139,6 +139,28 @@
     #deathOverlay .death-title { font-size: 34px; font-weight: 900; color: #f43f5e; letter-spacing: 3px; }
     #deathOverlay .death-sub { font-size: 14px; color: #cbd5e1; }
     #deathCountdown { font-size: 56px; font-weight: 900; color: #f8fafc; }
+    #respawnBtn {
+      display: none; pointer-events: auto; cursor: pointer; margin: 6px 0;
+      background: #0284c7; border: 2px solid #38bdf8; border-radius: 8px; color: #f8fafc;
+      padding: 12px 34px; font-size: 20px; font-weight: 900; letter-spacing: 2px;
+      box-shadow: 0 0 18px rgba(56, 189, 248, 0.45);
+    }
+    #respawnBtn small { display: block; font-size: 11px; font-weight: 700; letter-spacing: 0; color: #bae6fd; }
+    #heroPicker { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin-top: 10px; max-width: 92vw; }
+    .hero-pick {
+      pointer-events: auto; cursor: pointer; min-width: 92px; padding: 6px 10px;
+      background: rgba(15, 23, 42, 0.9); border: 1px solid #475569; border-radius: 6px;
+      color: #f8fafc; font-size: 12px; font-weight: 700; text-align: center;
+    }
+    .hero-pick small { display: block; color: #94a3b8; font-weight: 600; font-size: 10px; }
+    .hero-pick.active { border-color: #38bdf8; background: rgba(56, 189, 248, 0.25); }
+    #mapBanner {
+      position: absolute; top: 112px; left: 50%; transform: translateX(-50%); z-index: 2;
+      background: rgba(15, 23, 42, 0.92); border: 1px solid #38bdf8; border-radius: 10px;
+      padding: 14px 26px; text-align: center; opacity: 0; transition: opacity 0.4s;
+    }
+    #mapBanner .mb-kicker { font-size: 12px; color: #38bdf8; font-weight: 800; letter-spacing: 2px; }
+    #mapBanner .mb-name { font-size: 28px; font-weight: 900; color: #f8fafc; }
     #killFeed { position: absolute; top: 130px; right: 12px; display: flex; flex-direction: column; gap: 5px; }
     .feed-item { background: rgba(15,23,42,0.9); border-left: 3px solid #38bdf8; padding: 5px 10px; font-size: 12px; }
 
@@ -211,6 +233,7 @@
         <select id="modeSelect">
           <option value="stock">Stock Mode (3 Lives)</option>
           <option value="timer">Timer Mode (3:00 Clock)</option>
+          <option value="endless">Endless (All Maps, 5:00 Rotation)</option>
         </select>
         <select id="roleSelect">
           <option value="host">Solo vs AI / Host 1v1 Room</option>
@@ -286,7 +309,16 @@
       <div class="death-title">ELIMINATED</div>
       <div class="death-sub" id="deathKiller"></div>
       <div id="deathCountdown">3</div>
-      <div class="death-sub">Respawning at the safest spawn point...</div>
+      <div id="respawnBtn">RESPAWN<small>Press SPACE or click</small></div>
+      <div class="death-sub" id="deathStatus">Respawn available shortly...</div>
+      <div class="death-sub" style="margin-top:10px; color:#38bdf8; font-weight:700;">SWITCH HERO: press 1-6 or tap</div>
+      <div id="heroPicker"></div>
+    </div>
+
+    <!-- Endless Mode Arena Rotation Banner -->
+    <div id="mapBanner">
+      <div class="mb-kicker" id="mapBannerKicker">ARENA ROTATION</div>
+      <div class="mb-name" id="mapBannerName"></div>
     </div>
   </div>
 
@@ -472,7 +504,7 @@
       sendMatchState() {
         this.broadcast('matchState', {
           roomId: this.room.id, mapId: this.room.mapId, mode: this.room.mode,
-          timeRemaining: this.room.timeRemaining, doors: this.room.doors, players: publicPlayers(this.room.players)
+          timeRemaining: this.room.timeRemaining, round: this.room.round, doors: this.room.doors, players: publicPlayers(this.room.players)
         });
       }
 
@@ -541,8 +573,9 @@
           if (!this.room) {
             const mId = MAPS[data.mapId] ? data.mapId : 'foundry';
             this.room = {
-              id: data.roomId, mapId: mId, mode: data.mode || 'stock',
-              timeRemaining: 180, over: false, players: {}, deployables: [],
+              id: data.roomId, mapId: mId, mode: ['timer', 'endless'].includes(data.mode) ? data.mode : 'stock',
+              timeRemaining: data.mode === 'endless' ? ENDLESS_ROUND_SECS : 180, round: 1,
+              over: false, players: {}, deployables: [],
               doors: JSON.parse(JSON.stringify(MAPS[mId].doors))
             };
             if (pid === this.id) this.setupP2P(data.roomId, 'host', data);
@@ -570,7 +603,7 @@
         if (!this.room || this.room.over) return;
         const p = this.room.players[pid];
         if (!p) return;
-        if (p.dead && ev !== 'switchWeapon') return; // Eliminated: wait out the respawn cooldown
+        if (p.dead && !['switchWeapon', 'selectHero', 'requestRespawn'].includes(ev)) return; // Eliminated: wait out the respawn cooldown
         const now = Date.now();
         const hero = HEROES[p.heroId];
 
@@ -594,6 +627,12 @@
               this.emitNoise(p, p.stance === 'walk' ? 5.0 : 18.0, 'footstep');
             }
           }
+        } else if (ev === 'requestRespawn') {
+          // Eliminated players redeploy only when they ask to, once the cooldown has elapsed
+          if (p.dead && now >= p.respawnAt) this.respawn(p);
+        } else if (ev === 'selectHero') {
+          // Pick a different operative while eliminated; respawn happens on the normal cooldown
+          if (p.dead && p.heroId !== data) applyHero(p, data);
         } else if (ev === 'switchWeapon') {
           p.weaponSlot = data === 'secondary' ? 'secondary' : 'primary';
         } else if (ev === 'reloadWeapon') {
@@ -728,7 +767,7 @@
             this.broadcast('matchOver', { winner: attacker.name, reason: 'Opponent Stocks Depleted' });
             return;
           }
-          // Down for RESPAWN_MS; the tick loop brings them back at the safest spawn
+          // Down for at least RESPAWN_MS; humans then press to respawn, bots return automatically
           victim.hp = 0;
           victim.dead = true;
           victim.respawnAt = Date.now() + RESPAWN_MS;
@@ -762,7 +801,7 @@
 
           Object.values(this.room.players).forEach((p) => {
             if (p.dead) {
-              if (now >= p.respawnAt) this.respawn(p);
+              if (p.isBot && now >= p.respawnAt) this.respawn(p); // Humans press to respawn
               return;
             }
             p.ultCharge = Math.min(p.ultMax, p.ultCharge + 0.7);
@@ -772,7 +811,18 @@
         }, 50);
 
         setInterval(() => {
-          if (!this.room || this.room.over || this.room.mode !== 'timer') return;
+          if (!this.room || this.room.over) return;
+          if (this.room.mode === 'endless') {
+            // Rotate arenas every 5 minutes
+            this.room.timeRemaining--;
+            if (this.room.timeRemaining <= 0) {
+              rotateMap(this.room);
+              this.sendMatchState();
+            }
+            this.broadcast('timerSync', this.room.timeRemaining);
+            return;
+          }
+          if (this.room.mode !== 'timer') return;
           this.room.timeRemaining--;
           this.broadcast('timerSync', this.room.timeRemaining);
           if (this.room.timeRemaining <= 0) {
@@ -870,6 +920,19 @@
         heroGrid.appendChild(div);
       });
 
+      const picker = document.getElementById('heroPicker');
+      picker.innerHTML = '';
+      Object.values(catalog.heroes).forEach((h, i) => {
+        const btn = document.createElement('div');
+        btn.className = 'hero-pick';
+        btn.dataset.hero = h.id;
+        btn.innerHTML = `[${i + 1}] ${h.name}<small>${h.role}</small>`;
+        const pick = (e) => { e.preventDefault(); e.stopPropagation(); pickHeroOnDeath(h.id); };
+        btn.addEventListener('mousedown', pick);
+        btn.addEventListener('touchstart', pick, { passive: false });
+        picker.appendChild(btn);
+      });
+
       const mapGrid = document.getElementById('mapGrid');
       mapGrid.innerHTML = '';
       Object.values(catalog.maps).forEach((m) => {
@@ -884,6 +947,26 @@
         mapGrid.appendChild(div);
       });
     });
+
+    let shownHeroId = null;
+    function requestRespawn() {
+      const me = roomState && roomState.players[socket.id];
+      if (!me || !me.dead || Date.now() < me.respawnAt) return;
+      socket.emit('requestRespawn');
+    }
+    {
+      const btn = document.getElementById('respawnBtn');
+      const press = (e) => { e.preventDefault(); e.stopPropagation(); requestRespawn(); };
+      btn.addEventListener('mousedown', press);
+      btn.addEventListener('touchstart', press, { passive: false });
+    }
+    function pickHeroOnDeath(heroId) {
+      const me = roomState && roomState.players[socket.id];
+      if (!me || !me.dead || me.heroId === heroId) return;
+      socket.emit('selectHero', heroId);
+      me.heroId = heroId; // Optimistic highlight until the next tick confirms
+      document.querySelectorAll('.hero-pick').forEach((b) => b.classList.toggle('active', b.dataset.hero === heroId));
+    }
 
     function syncTouchHUD() {
       document.getElementById('touchControls').style.display = showTouchHUD ? 'block' : 'none';
@@ -972,16 +1055,35 @@
       });
     }
 
+    let mapBannerTimer = null;
+    function showMapBanner(kicker, name) {
+      const el = document.getElementById('mapBanner');
+      document.getElementById('mapBannerKicker').textContent = kicker;
+      document.getElementById('mapBannerName').textContent = name;
+      el.style.opacity = '1';
+      clearTimeout(mapBannerTimer);
+      mapBannerTimer = setTimeout(() => { el.style.opacity = '0'; }, 3500);
+    }
+
     socket.on('matchState', (state) => {
-      const firstState = !roomState || roomState.mapId !== state.mapId;
+      const rotated = !!roomState && roomState.mapId !== state.mapId;
+      const firstState = !roomState || rotated;
       roomState = state;
-      if (firstState) buildArenaScene(state.mapId, state.doors);
+      if (firstState) {
+        buildArenaScene(state.mapId, state.doors);
+        activeTracers = [];
+        acousticPings = [];
+        const mapName = catalog.maps[state.mapId].name.toUpperCase();
+        if (rotated) showMapBanner(`ARENA ROTATION • ROUND ${state.round || 1}`, mapName);
+        else if (state.mode === 'endless') showMapBanner('ENDLESS MODE • ROUND 1', mapName);
+      }
       const me = state.players[socket.id];
       if (me && firstState) {
         placeLocalPlayer(me.x, me.y, me.z, me.yaw);
         localPlayer.pitch = 0;
         localPlayer.tpSeq = me.tpSeq || 0;
         gunBody.material.color.setHex(HEROES[me.heroId].color);
+        shownHeroId = me.heroId;
       }
       document.getElementById('hudMapName').textContent = catalog.maps[state.mapId].name.toUpperCase();
     });
@@ -1049,9 +1151,13 @@
           scene.add(group);
           group.position.set(p.x, p.y, p.z);
           group.rotation.y = p.yaw;
-          opponentMeshes[p.id] = { group, body };
+          opponentMeshes[p.id] = { group, body, heroId: p.heroId };
         }
         const m = opponentMeshes[p.id];
+        if (m.heroId !== p.heroId) {
+          m.heroId = p.heroId;
+          m.body.material.color.setHex(catalog.heroes[p.heroId].color);
+        }
         m.group.visible = !p.dead;
         // Network target; animate() eases the mesh toward it between 20 Hz ticks
         m.target = { x: p.x, y: p.y, z: p.z, yaw: p.yaw };
@@ -1116,9 +1222,24 @@
       const overlay = document.getElementById('deathOverlay');
       overlay.style.display = me.dead ? 'flex' : 'none';
       document.getElementById('crosshairWrap').style.display = me.dead ? 'none' : 'block';
+      document.getElementById('touchControls').style.display = showTouchHUD && !me.dead ? 'block' : 'none';
+      if (me.dead) {
+        document.getElementById('mapBanner').style.opacity = '0'; // Death screen takes priority
+        document.querySelectorAll('.hero-pick').forEach((b) => b.classList.toggle('active', b.dataset.hero === me.heroId));
+      }
+      if (me.heroId !== shownHeroId) {
+        shownHeroId = me.heroId;
+        gunBody.material.color.setHex(catalog.heroes[me.heroId].color);
+      }
       if (me.dead) {
         document.getElementById('deathKiller').textContent = me.killedBy ? `Taken down by ${me.killedBy}` : '';
+        const ready = now >= me.respawnAt;
+        document.getElementById('deathCountdown').style.display = ready ? 'none' : 'block';
         document.getElementById('deathCountdown').textContent = Math.max(1, Math.ceil((me.respawnAt - now) / 1000));
+        document.getElementById('respawnBtn').style.display = ready ? 'block' : 'none';
+        document.getElementById('deathStatus').textContent = ready
+          ? 'You will deploy at the spawn point farthest from your opponent.'
+          : 'Respawn available shortly...';
       }
       const hero = catalog.heroes[me.heroId];
       const w = hero[me.weaponSlot];
@@ -1136,6 +1257,9 @@
       const opp = Object.values(players).find((p) => p.id !== socket.id);
       if (roomState.mode === 'stock') {
         document.getElementById('hudModeStat').textContent = `STOCKS: ${me.stocks} vs ${opp ? opp.stocks : 3}`;
+      } else if (roomState.mode === 'endless') {
+        const t = Math.max(0, roomState.timeRemaining);
+        document.getElementById('hudModeStat').textContent = `ENDLESS R${roomState.round || 1} • NEXT MAP ${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`;
       } else {
         const m = Math.floor(roomState.timeRemaining / 60);
         const s = String(roomState.timeRemaining % 60).padStart(2, '0');
@@ -1166,9 +1290,17 @@
       const move = MOVE_CODES[e.code];
       if (move) localPlayer.keys[move] = true;
       if (move || e.code === 'Space') e.preventDefault(); // No page scrolling / Ctrl shortcuts mid-fight
+      const me = roomState && roomState.players[socket.id];
+      if (me && me.dead && (e.code === 'Space' || e.code === 'Enter')) { requestRespawn(); return; }
       if (e.code === 'Space') tryJump();
       if (e.repeat) return;
       const k = e.key.toLowerCase();
+      if (me && me.dead) {
+        const heroIds = Object.keys(catalog.heroes);
+        const n = parseInt(k, 10);
+        if (n >= 1 && n <= heroIds.length) pickHeroOnDeath(heroIds[n - 1]);
+        return;
+      }
       if (k === '1') socket.emit('switchWeapon', 'primary');
       if (k === '2') socket.emit('switchWeapon', 'secondary');
       if (k === 'r') socket.emit('reloadWeapon');
@@ -1194,6 +1326,8 @@
 
     canvas.addEventListener('mousedown', (e) => {
       sfx.init();
+      const me = roomState && roomState.players[socket.id];
+      if (me && me.dead && e.button === 0) requestRespawn();
       if (showTouchHUD) return;
       if (document.pointerLockElement !== canvas && canvas.requestPointerLock) { canvas.requestPointerLock(); return; }
       if (e.button === 0) { localPlayer.firing = true; attemptFire(); }
@@ -1525,11 +1659,15 @@
 
       if (me.dead) {
         tagEl.style.display = 'none';
-        coachEl.textContent = '☠️ ELIMINATED: Respawning shortly. Plan your next approach!';
+        coachEl.textContent = now < me.respawnAt
+          ? '☠️ ELIMINATED: Pick a hero while you wait. Plan your next approach!'
+          : '☠️ READY: Press SPACE, click or tap RESPAWN to deploy.';
         coachEl.style.borderLeftColor = '#f43f5e';
       } else if (opp && opp.dead) {
         tagEl.style.display = 'none';
-        coachEl.textContent = `☠️ ${opp.name} ELIMINATED: respawning in ${Math.max(1, Math.ceil((opp.respawnAt - now) / 1000))}s. Reposition now!`;
+        coachEl.textContent = now < opp.respawnAt
+          ? `☠️ ${opp.name} ELIMINATED: can respawn in ${Math.ceil((opp.respawnAt - now) / 1000)}s. Reposition now!`
+          : `☠️ ${opp.name} ELIMINATED: may redeploy any moment. Get set!`;
         coachEl.style.borderLeftColor = '#10b981';
       } else if (opp) {
         const oppPos = new THREE.Vector3(opp.x, opp.y + 2.1, opp.z);

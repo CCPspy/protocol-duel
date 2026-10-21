@@ -14,6 +14,7 @@ app.use(express.static(__dirname));
 // collision, spawns and weapon stats match exactly on both ends.
 const {
   HEROES, MAPS, SURFACE_MULT, PHYS, publicPlayers, RESPAWN_MS, pickRespawn, updateBot,
+  ENDLESS_ROUND_SECS, applyHero, rotateMap,
   getSolids, getSurfaceAt, slideMove, intersectAABB, intersectSolid
 } = require('./shared.js');
 
@@ -65,6 +66,7 @@ function sendMatchState(room) {
     mapId: room.mapId,
     mode: room.mode,
     timeRemaining: room.timeRemaining,
+    round: room.round,
     doors: room.doors,
     players: publicPlayers(room.players)
   });
@@ -119,8 +121,9 @@ io.on('connection', (socket) => {
       rooms[rId] = {
         id: rId,
         mapId: chosenMap,
-        mode: mode === 'timer' ? 'timer' : 'stock',
-        timeRemaining: 180,
+        mode: ['timer', 'endless'].includes(mode) ? mode : 'stock',
+        timeRemaining: mode === 'endless' ? ENDLESS_ROUND_SECS : 180,
+        round: 1,
         suddenDeath: false,
         over: false,
         players: {},
@@ -206,6 +209,22 @@ io.on('connection', (socket) => {
         emitAcousticPing(room, p, p.stance === 'walk' ? 4.5 : 18.0, 'footstep');
       }
     }
+  });
+
+  // Eliminated players redeploy only when they ask to, once the cooldown has elapsed
+  socket.on('requestRespawn', () => {
+    const room = rooms[socket.roomId];
+    const p = room && room.players[socket.id];
+    if (!p || !p.dead || Date.now() < p.respawnAt) return;
+    respawnPlayer(room, p);
+  });
+
+  // Pick a different operative while eliminated
+  socket.on('selectHero', (heroId) => {
+    const room = rooms[socket.roomId];
+    const p = room && room.players[socket.id];
+    if (!p || !p.dead || p.heroId === heroId) return;
+    applyHero(p, heroId);
   });
 
   socket.on('switchWeapon', (slot) => {
@@ -473,7 +492,7 @@ function applyDamage(room, attacker, victim, dmg, sourceName, isHeadshot = false
       return;
     }
 
-    // Down for RESPAWN_MS; the tick loop brings them back at the safest spawn
+    // Down for at least RESPAWN_MS; humans then press to respawn, bots return automatically
     victim.hp = 0;
     victim.dead = true;
     victim.respawnAt = now + RESPAWN_MS;
@@ -518,7 +537,7 @@ setInterval(() => {
 
     for (const p of Object.values(room.players)) {
       if (p.dead) {
-        if (now >= p.respawnAt) respawnPlayer(room, p);
+        if (p.isBot && now >= p.respawnAt) respawnPlayer(room, p); // Humans press to respawn
         continue;
       }
       p.ultCharge = Math.min(p.ultMax, p.ultCharge + 0.7);
@@ -537,7 +556,18 @@ setInterval(() => {
 setInterval(() => {
   for (const rId of Object.keys(rooms)) {
     const room = rooms[rId];
-    if (room.over || Object.keys(room.players).length < 2) continue;
+    if (room.over) continue;
+    if (room.mode === 'endless') {
+      // Rotate arenas every 5 minutes for as long as anyone is playing
+      room.timeRemaining--;
+      if (room.timeRemaining <= 0) {
+        rotateMap(room);
+        sendMatchState(room);
+      }
+      io.to(rId).emit('timerSync', room.timeRemaining);
+      continue;
+    }
+    if (Object.keys(room.players).length < 2) continue;
     if (room.mode === 'timer') {
       room.timeRemaining--;
       if (room.timeRemaining <= 0) {

@@ -299,6 +299,53 @@
   // ==========================================================================
   const RESPAWN_MS = 3000;
 
+  // ==========================================================================
+  // ENDLESS MODE MAP ROTATION & HERO SWAPPING
+  // ==========================================================================
+  const ENDLESS_ROUND_SECS = 300; // Each arena lasts 5 minutes
+  const MAP_ORDER = Object.keys(MAPS);
+
+  // Swap a player's operative (allowed while eliminated); takes effect fully on respawn
+  function applyHero(p, heroId) {
+    const h = HEROES[heroId];
+    if (!h) return false;
+    p.heroId = h.id;
+    p.maxHp = h.maxHp;
+    p.ultMax = h.ultimate.cost;
+    p.ultCharge = Math.min(p.ultCharge, p.ultMax);
+    p.weaponSlot = 'primary';
+    p.ammo = { primary: h.primary.mag, secondary: h.secondary.mag };
+    p.reloadingUntil = 0;
+    p.defCdUntil = 0;
+    p.defActiveUntil = 0;
+    p.ultActiveUntil = 0;
+    return true;
+  }
+
+  // Advance to the next arena: fresh doors/deployables, everyone revived at their own side's spawn.
+  // Scores carry over. Caller broadcasts the new match state (which carries each player's new tpSeq).
+  function rotateMap(room) {
+    const next = MAP_ORDER[(MAP_ORDER.indexOf(room.mapId) + 1) % MAP_ORDER.length];
+    const map = MAPS[next];
+    room.mapId = next;
+    room.doors = JSON.parse(JSON.stringify(map.doors));
+    room.deployables = [];
+    room.timeRemaining = ENDLESS_ROUND_SECS;
+    room.round = (room.round || 1) + 1;
+    for (const p of Object.values(room.players)) {
+      const sp = map.spawns[p.spawnIdx || 0];
+      const h = HEROES[p.heroId];
+      p.x = sp.x; p.y = sp.y; p.z = sp.z; p.yaw = sp.yaw;
+      p.dead = false; p.respawnAt = 0;
+      p.hp = p.maxHp; p.armor = 0;
+      p.ammo = { primary: h.primary.mag, secondary: h.secondary.mag };
+      p.reloadingUntil = 0; p.slowedUntil = 0; p.blackoutUntil = 0; p.revealedUntil = 0;
+      p.history = [];
+      p.botSeenAt = 0; p.botLastTarget = null;
+      p.tpSeq++;
+    }
+  }
+
   // Spawn node farthest from every living opponent
   function pickRespawn(room, victim) {
     const map = MAPS[room.mapId];
@@ -425,6 +472,7 @@
 
   return {
     HEROES, MAPS, SURFACE_MULT, PHYS, publicPlayers, RESPAWN_MS, BOT, pickRespawn, updateBot,
+    ENDLESS_ROUND_SECS, MAP_ORDER, applyHero, rotateMap,
     getSolids, surfaceTop, getFloorElevation, getCeiling, collidesAt, slideMove,
     getSurfaceAt, intersectAABB, intersectSolid
   };
