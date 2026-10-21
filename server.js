@@ -14,6 +14,7 @@ app.use(express.static(__dirname));
 // collision, spawns and weapon stats match exactly on both ends.
 const {
   HEROES, MAPS, SURFACE_MULT, PHYS, publicPlayers, RESPAWN_MS, pickRespawn, updateBot,
+  BOT_DIFFICULTIES, DEFAULT_BOT_DIFFICULTY,
   ENDLESS_ROUND_SECS, applyHero, rotateMap,
   getSolids, getSurfaceAt, slideMove, intersectAABB, intersectSolid
 } = require('./shared.js');
@@ -113,7 +114,7 @@ function emitAcousticPing(room, sourcePlayer, baseRadius, type) {
 io.on('connection', (socket) => {
   socket.emit('initCatalog', { heroes: HEROES, maps: MAPS });
 
-  socket.on('joinMatch', ({ roomId, playerName, heroId, mapId, mode, spawnBot } = {}) => {
+  socket.on('joinMatch', ({ roomId, playerName, heroId, mapId, mode, spawnBot, botDifficulty } = {}) => {
     const rId = String(roomId || 'duel-1').trim().toLowerCase();
 
     if (!rooms[rId]) {
@@ -164,14 +165,16 @@ io.on('connection', (socket) => {
     if (spawnBot && humans.length === 0) {
       const botHeroes = Object.keys(HEROES).filter((h) => h !== heroId);
       const botHero = botHeroes[Math.floor(Math.random() * botHeroes.length)];
+      const difficulty = BOT_DIFFICULTIES[botDifficulty] ? botDifficulty : DEFAULT_BOT_DIFFICULTY;
       room.players[botId] = createPlayerState(
         botId,
-        `BOT // ${HEROES[botHero].name}`,
+        `BOT // ${HEROES[botHero].name} (${BOT_DIFFICULTIES[difficulty].label})`,
         botHero,
         map.spawns[1 - idx],
         true,
         1 - idx
       );
+      room.players[botId].botDifficulty = difficulty;
     }
 
     sendMatchState(room);
