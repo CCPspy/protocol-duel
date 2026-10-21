@@ -130,6 +130,15 @@
     }
     .hp-bar { width: 100%; height: 8px; background: #1e293b; border-radius: 4px; overflow: hidden; margin-top: 5px; }
     .hp-fill { height: 100%; background: #10b981; width: 100%; transition: width 0.15s; }
+    #deathOverlay {
+      position: absolute; inset: 0; display: none; flex-direction: column;
+      align-items: center; justify-content: center; gap: 8px;
+      background: radial-gradient(circle at center, rgba(127, 29, 29, 0.25), rgba(9, 13, 18, 0.72));
+      text-align: center;
+    }
+    #deathOverlay .death-title { font-size: 34px; font-weight: 900; color: #f43f5e; letter-spacing: 3px; }
+    #deathOverlay .death-sub { font-size: 14px; color: #cbd5e1; }
+    #deathCountdown { font-size: 56px; font-weight: 900; color: #f8fafc; }
     #killFeed { position: absolute; top: 130px; right: 12px; display: flex; flex-direction: column; gap: 5px; }
     .feed-item { background: rgba(15,23,42,0.9); border-left: 3px solid #38bdf8; padding: 5px 10px; font-size: 12px; }
 
@@ -271,6 +280,14 @@
     </div>
 
     <div id="killFeed"></div>
+
+    <!-- Respawn Cooldown Screen -->
+    <div id="deathOverlay">
+      <div class="death-title">ELIMINATED</div>
+      <div class="death-sub" id="deathKiller"></div>
+      <div id="deathCountdown">3</div>
+      <div class="death-sub">Respawning at the safest spawn point...</div>
+    </div>
   </div>
 
   <!-- iPAD / MOBILE TWIN-STICK TOUCH CONTROLS -->
@@ -439,7 +456,8 @@
           reloadingUntil: 0, defCdUntil: 0, defActiveUntil: 0,
           ultCharge: 300, ultMax: h.ultimate.cost, ultActiveUntil: 0,
           slowedUntil: 0, blackoutUntil: 0, revealedUntil: 0,
-          lastShotAt: 0, lastStepAt: 0, stepDist: 0, tpSeq: 0, history: [], patrolAngle: 0
+          lastShotAt: 0, lastStepAt: 0, stepDist: 0, tpSeq: 0, history: [], patrolAngle: 0,
+          dead: false, respawnAt: 0, killedBy: ''
         };
       }
 
@@ -552,6 +570,7 @@
         if (!this.room || this.room.over) return;
         const p = this.room.players[pid];
         if (!p) return;
+        if (p.dead && ev !== 'switchWeapon') return; // Eliminated: wait out the respawn cooldown
         const now = Date.now();
         const hero = HEROES[p.heroId];
 
@@ -610,7 +629,7 @@
             p.ultCharge = 0;
             p.ultActiveUntil = now + hero.ultimate.durationMs;
             Object.values(this.room.players).forEach((t) => {
-              if (t.id === p.id) return;
+              if (t.id === p.id || t.dead) return;
               if (p.heroId === 'vex' || p.heroId === 'cipher') t.revealedUntil = now + 6500;
               if (p.heroId === 'krosh') { p.armor = 50; t.slowedUntil = now + 3500; }
               if (p.heroId === 'bastion' && Math.hypot(t.x - p.x, t.z - p.z) <= 16) this.applyDmg(p, t, 45, 'Lockdown Zap', false);
@@ -658,7 +677,7 @@
 
         let hitTarget = null, hitDist = wallDist, head = false;
         Object.values(this.room.players).forEach((t) => {
-          if (t.id === shooter.id) return;
+          if (t.id === shooter.id || t.dead) return;
           const box = { x: t.x, y: t.y + 0.9, z: t.z, w: 0.95, h: 1.8, d: 0.95 };
           const d = intersectAABB(orig, dir, box);
           if (d !== null && d < hitDist) {
@@ -689,6 +708,7 @@
       }
 
       applyDmg(attacker, victim, dmg, wepName, isHeadshot) {
+        if (victim.dead) return;
         attacker.ultCharge = Math.min(attacker.ultMax, attacker.ultCharge + dmg * 2.4);
         victim.ultCharge = Math.min(victim.ultMax, victim.ultCharge + dmg * 1.4);
         if (victim.armor > 0) {
@@ -708,72 +728,45 @@
             this.broadcast('matchOver', { winner: attacker.name, reason: 'Opponent Stocks Depleted' });
             return;
           }
-          const map = MAPS[this.room.mapId];
-          const s0 = map.spawns[0], s1 = map.spawns[1];
-          const sp = Math.hypot(attacker.x - s0.x, attacker.z - s0.z) > Math.hypot(attacker.x - s1.x, attacker.z - s1.z) ? s0 : s1;
-          victim.hp = victim.maxHp; victim.armor = 0;
-          victim.x = sp.x; victim.y = sp.y; victim.z = sp.z; victim.yaw = sp.yaw;
-          victim.ammo.primary = HEROES[victim.heroId].primary.mag;
-          victim.ammo.secondary = HEROES[victim.heroId].secondary.mag;
-          victim.reloadingUntil = 0;
-          this.teleport(victim);
+          // Down for RESPAWN_MS; the tick loop brings them back at the safest spawn
+          victim.hp = 0;
+          victim.dead = true;
+          victim.respawnAt = Date.now() + RESPAWN_MS;
+          victim.killedBy = attacker.name;
+          victim.defActiveUntil = 0;
+          victim.ultActiveUntil = 0;
         }
       }
 
+      respawn(p) {
+        const sp = pickRespawn(this.room, p);
+        const h = HEROES[p.heroId];
+        p.dead = false; p.respawnAt = 0;
+        p.hp = p.maxHp; p.armor = 0;
+        p.x = sp.x; p.y = sp.y; p.z = sp.z; p.yaw = sp.yaw;
+        p.ammo.primary = h.primary.mag;
+        p.ammo.secondary = h.secondary.mag;
+        p.reloadingUntil = 0; p.slowedUntil = 0; p.blackoutUntil = 0; p.botSeenAt = 0;
+        this.teleport(p);
+      }
+
       startLoop() {
+        this.botHooks = {
+          noise: (p, radius, type) => this.emitNoise(p, radius, type),
+          shoot: (p, weapon, origin, dir, mult) => this.raycastShot(p, weapon, origin, dir, mult)
+        };
         setInterval(() => {
           if (!this.room || this.room.over) return;
           const now = Date.now();
           this.room.deployables = this.room.deployables.filter((d) => d.expiresAt > now);
 
           Object.values(this.room.players).forEach((p) => {
-            p.ultCharge = Math.min(p.ultMax, p.ultCharge + 0.7);
-            if (p.isBot) {
-              const target = Object.values(this.room.players).find((h) => !h.isBot);
-              if (!target) return;
-              const dx = target.x - p.x, dz = target.z - p.z;
-              const dist = Math.hypot(dx, dz) || 1;
-              p.yaw = Math.atan2(-dx, -dz);
-
-              // Check if AI has clear line of sight to player
-              const eye = { x: p.x, y: p.y + 1.5, z: p.z };
-              const aimDir = { x: dx / dist, y: (target.y - p.y) / dist, z: dz / dist };
-              let wallBlocked = false;
-              for (const b of getSolids(this.room.mapId, this.room.doors, this.room.deployables)) {
-                const t = intersectSolid(eye, aimDir, b);
-                if (t !== null && t < dist) { wallBlocked = true; break; }
-              }
-
-              // Move around obstacles using sliding collision
-              let moveX = (dx / dist) * 0.19;
-              let moveZ = (dz / dist) * 0.19;
-              if (wallBlocked || dist < 11) {
-                p.patrolAngle += 0.03;
-                moveX = Math.cos(p.patrolAngle) * 0.18 + (dx / dist) * 0.08;
-                moveZ = Math.sin(p.patrolAngle) * 0.18 + (dz / dist) * 0.08;
-              }
-              const nextPos = slideMove(this.room.mapId, this.room.doors, this.room.deployables, p.x, p.y, p.z, moveX, moveZ);
-              p.x = nextPos.x; p.z = nextPos.z;
-              p.y = getFloorElevation(this.room.mapId, this.room.doors, this.room.deployables, p.x, p.y, p.z);
-
-              if (now - p.lastStepAt > 420) {
-                p.lastStepAt = now;
-                this.emitNoise(p, 16, 'footstep');
-              }
-
-              // Only fire when AI has line of sight!
-              const h = HEROES[p.heroId];
-              if (!wallBlocked && now - p.lastShotAt > Math.max(550, h.primary.fireRateMs * 1.5)) {
-                p.lastShotAt = now;
-                this.emitNoise(p, h.primary.noiseRadius, 'gunfire');
-                const botSpread = 0.045;
-                const rx = aimDir.x + (Math.random() - 0.5) * botSpread;
-                const ry = aimDir.y + (Math.random() - 0.5) * botSpread;
-                const rz = aimDir.z + (Math.random() - 0.5) * botSpread;
-                const l = Math.hypot(rx, ry, rz) || 1;
-                this.raycastShot(p, h.primary, eye, { x: rx / l, y: ry / l, z: rz / l }, 0.65);
-              }
+            if (p.dead) {
+              if (now >= p.respawnAt) this.respawn(p);
+              return;
             }
+            p.ultCharge = Math.min(p.ultMax, p.ultCharge + 0.7);
+            if (p.isBot) updateBot(this.room, p, now, this.botHooks);
           });
           this.broadcast('worldTick', { players: publicPlayers(this.room.players), deployables: this.room.deployables });
         }, 50);
@@ -1059,6 +1052,7 @@
           opponentMeshes[p.id] = { group, body };
         }
         const m = opponentMeshes[p.id];
+        m.group.visible = !p.dead;
         // Network target; animate() eases the mesh toward it between 20 Hz ticks
         m.target = { x: p.x, y: p.y, z: p.z, yaw: p.yaw };
         if (m.group.position.distanceTo(new THREE.Vector3(p.x, p.y, p.z)) > 4) m.group.position.set(p.x, p.y, p.z);
@@ -1119,6 +1113,13 @@
     socket.on('timerSync', (t) => { if (roomState) roomState.timeRemaining = t; });
 
     function updateHUD(me, players, now) {
+      const overlay = document.getElementById('deathOverlay');
+      overlay.style.display = me.dead ? 'flex' : 'none';
+      document.getElementById('crosshairWrap').style.display = me.dead ? 'none' : 'block';
+      if (me.dead) {
+        document.getElementById('deathKiller').textContent = me.killedBy ? `Taken down by ${me.killedBy}` : '';
+        document.getElementById('deathCountdown').textContent = Math.max(1, Math.ceil((me.respawnAt - now) / 1000));
+      }
       const hero = catalog.heroes[me.heroId];
       const w = hero[me.weaponSlot];
       document.getElementById('hudHeroName').textContent = hero.name;
@@ -1282,6 +1283,7 @@
     function attemptFire() {
       if (!roomState || !roomState.players[socket.id]) return;
       const me = roomState.players[socket.id];
+      if (me.dead) return;
       const hero = catalog.heroes[me.heroId];
       const w = hero[me.weaponSlot];
       const now = Date.now();
@@ -1432,7 +1434,14 @@
 
       physicsAccumulator += frameMs;
       while (physicsAccumulator >= PHYSICS_DT) {
-        stepPhysics(me, hero, map, now);
+        if (me.dead) {
+          // Frozen where we fell until the authority respawns us
+          localPlayer.prevX = localPlayer.x; localPlayer.prevY = localPlayer.y; localPlayer.prevZ = localPlayer.z;
+          localPlayer.vx = localPlayer.vz = localPlayer.moveSpeed = 0;
+          localPlayer.firing = false;
+        } else {
+          stepPhysics(me, hero, map, now);
+        }
         physicsAccumulator -= PHYSICS_DT;
       }
       const alpha = physicsAccumulator / PHYSICS_DT;
@@ -1490,12 +1499,15 @@
       });
 
       // 5. Update Camera & Send State
-      camera.position.set(renderX, renderY + (localPlayer.stance === 'crouch' ? 1.05 : 1.6), renderZ);
+      const eyeHeight = me.dead ? 0.35 : (localPlayer.stance === 'crouch' ? 1.05 : 1.6);
+      camera.position.set(renderX, renderY + eyeHeight, renderZ);
       camera.rotation.order = 'YXZ';
       camera.rotation.y = localPlayer.yaw + localPlayer.recoilYaw;
       camera.rotation.x = localPlayer.pitch + localPlayer.recoilPitch;
+      camera.rotation.z = me.dead ? 0.35 : 0;
+      gunRig.visible = !me.dead;
 
-      if (now - localPlayer.lastNetSend >= NET_SEND_MS) {
+      if (!me.dead && now - localPlayer.lastNetSend >= NET_SEND_MS) {
         localPlayer.lastNetSend = now;
         socket.emit('moveUpdate', {
           x: localPlayer.x, y: localPlayer.y, z: localPlayer.z,
@@ -1511,7 +1523,15 @@
       let nearDoor = false;
       (roomState.doors || []).forEach((d) => { if (Math.hypot(localPlayer.x - d.x, localPlayer.z - d.z) <= 8) nearDoor = true; });
 
-      if (opp) {
+      if (me.dead) {
+        tagEl.style.display = 'none';
+        coachEl.textContent = '☠️ ELIMINATED: Respawning shortly. Plan your next approach!';
+        coachEl.style.borderLeftColor = '#f43f5e';
+      } else if (opp && opp.dead) {
+        tagEl.style.display = 'none';
+        coachEl.textContent = `☠️ ${opp.name} ELIMINATED: respawning in ${Math.max(1, Math.ceil((opp.respawnAt - now) / 1000))}s. Reposition now!`;
+        coachEl.style.borderLeftColor = '#10b981';
+      } else if (opp) {
         const oppPos = new THREE.Vector3(opp.x, opp.y + 2.1, opp.z);
         const projected = oppPos.clone().project(camera);
         const distToOpp = Math.hypot(opp.x - localPlayer.x, opp.z - localPlayer.z);
