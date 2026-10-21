@@ -59,6 +59,7 @@
       background: #0284c7; border-color: #38bdf8; font-weight: 800; cursor: pointer;
       margin-left: auto; padding: 12px 24px; font-size: 15px;
     }
+    button.launch-btn:disabled { opacity: 0.45; cursor: wait; }
 
     /* IN-GAME TACTICAL HUD */
     #hud { position: fixed; inset: 0; pointer-events: none; display: none; z-index: 10; }
@@ -209,7 +210,7 @@
         <label style="font-size:12px; display:flex; align-items:center; gap:5px; cursor:pointer;">
           <input type="checkbox" id="botToggle" checked /> Spawn AI Enemy
         </label>
-        <button class="launch-btn" id="deployBtn">START MATCH</button>
+        <button class="launch-btn" id="deployBtn" disabled>START MATCH</button>
       </div>
     </div>
   </div>
@@ -294,6 +295,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+  <script src="shared.js"></script>
 
   <script>
     // ========================================================================
@@ -361,138 +363,11 @@
     const sfx = new SoundFX();
 
     // ========================================================================
-    // 2. SIX (6) HEROES & FIVE (5) MAPS CATALOG
-    // ========================================================================
-    const HEROES = {
-      vex: {
-        id: 'vex', name: 'VEX', role: 'Recon Sniper', color: 0x00e5ff, maxHp: 100, speed: 7.2,
-        primary: { name: 'SR-9 Talon (Single-Shot Rifle)', dmg: 68, headMult: 2.13, fireRateMs: 700, mag: 8, reloadMs: 1600, baseSpread: 0.001, moveSpread: 0.065, recoilPitch: 0.075, recoilYaw: 0.01, pellets: 1, noiseRadius: 38, pattern: 'single' },
-        secondary: { name: 'P4-Whisper (Silenced Pistol)', dmg: 26, headMult: 2.0, fireRateMs: 170, mag: 12, reloadMs: 1100, baseSpread: 0.006, moveSpread: 0.025, recoilPitch: 0.022, recoilYaw: 0.006, pellets: 1, noiseRadius: 10, pattern: 'semi-silenced' },
-        defensive: { name: 'Phase Step (Dash)', cdMs: 12000, durationMs: 400 },
-        ultimate: { name: 'Echo Pulse (Wallhack)', cost: 1000, durationMs: 6500 }
-      },
-      krosh: {
-        id: 'krosh', name: 'KROSH', role: 'Shotgun Breacher', color: 0xff5722, maxHp: 125, speed: 6.7,
-        primary: { name: 'M88 Slag (Lever Shotgun)', dmg: 13, headMult: 1.5, fireRateMs: 800, mag: 6, reloadMs: 1900, baseSpread: 0.055, moveSpread: 0.03, recoilPitch: 0.095, recoilYaw: 0.03, pellets: 10, noiseRadius: 42, pattern: 'shotgun' },
-        secondary: { name: 'Vulcan .50 (Heavy Revolver)', dmg: 56, headMult: 2.0, fireRateMs: 440, mag: 6, reloadMs: 1500, baseSpread: 0.004, moveSpread: 0.045, recoilPitch: 0.065, recoilYaw: 0.015, pellets: 1, noiseRadius: 36, pattern: 'revolver' },
-        defensive: { name: 'Aegis Shield (Block)', cdMs: 14000, durationMs: 4200 },
-        ultimate: { name: 'Seismic Slam (+50 Armor & Slow)', cost: 1050, durationMs: 4500 }
-      },
-      cipher: {
-        id: 'cipher', name: 'CIPHER', role: 'Burst Tactician', color: 0xaa00ff, maxHp: 100, speed: 7.4,
-        primary: { name: 'VX-3 Hornet (3-Burst SMG)', dmg: 21, headMult: 2.0, fireRateMs: 270, mag: 27, reloadMs: 1400, baseSpread: 0.008, moveSpread: 0.035, recoilPitch: 0.024, recoilYaw: 0.016, pellets: 1, noiseRadius: 28, pattern: 'burst' },
-        secondary: { name: 'G-18 Stinger (Auto-Pistol)', dmg: 15, headMult: 1.8, fireRateMs: 78, mag: 18, reloadMs: 1200, baseSpread: 0.022, moveSpread: 0.04, recoilPitch: 0.026, recoilYaw: 0.022, pellets: 1, noiseRadius: 25, pattern: 'auto' },
-        defensive: { name: 'Smoke Wall (Cover)', cdMs: 14000, durationMs: 6000 },
-        ultimate: { name: 'Neural EMP (Reveal + Jam)', cost: 1000, durationMs: 7000 }
-      },
-      sable: {
-        id: 'sable', name: 'SABLE', role: 'Silent Flanker', color: 0x00e676, maxHp: 100, speed: 7.7,
-        primary: { name: 'KR-7 Spectre (Silenced Carbine)', dmg: 26, headMult: 2.0, fireRateMs: 95, mag: 24, reloadMs: 1450, baseSpread: 0.009, moveSpread: 0.038, recoilPitch: 0.022, recoilYaw: 0.014, pellets: 1, noiseRadius: 14, pattern: 'auto-silenced' },
-        secondary: { name: 'Volt-2 (Taser Pistol)', dmg: 28, headMult: 1.5, fireRateMs: 360, mag: 6, reloadMs: 1200, baseSpread: 0.005, moveSpread: 0.02, recoilPitch: 0.015, recoilYaw: 0.005, pellets: 1, noiseRadius: 10, pattern: 'sensor' },
-        defensive: { name: 'Mirage Cloak (Stealth)', cdMs: 15000, durationMs: 3000 },
-        ultimate: { name: 'Shadow Stalker (Silent Sprint)', cost: 1000, durationMs: 9000 }
-      },
-      bastion: {
-        id: 'bastion', name: 'BASTION', role: 'Heavy Anchor', color: 0xffc400, maxHp: 115, speed: 6.8,
-        primary: { name: 'HMG-42 Anvil (Heavy Rifle)', dmg: 39, headMult: 2.0, fireRateMs: 135, mag: 20, reloadMs: 1850, baseSpread: 0.007, moveSpread: 0.055, recoilPitch: 0.042, recoilYaw: 0.012, pellets: 1, noiseRadius: 40, pattern: 'wallbang' },
-        secondary: { name: 'Flare-X (Incendiary)', dmg: 36, headMult: 1.4, fireRateMs: 550, mag: 4, reloadMs: 1400, baseSpread: 0.008, moveSpread: 0.025, recoilPitch: 0.032, recoilYaw: 0.005, pellets: 1, noiseRadius: 26, pattern: 'incendiary' },
-        defensive: { name: 'Hardlight Wall (320 HP Cover)', cdMs: 15000, durationMs: 7000 },
-        ultimate: { name: 'Lockdown Zap (Door Lock + Shock)', cost: 1100, durationMs: 8000 }
-      },
-      volt: {
-        id: 'volt', name: 'VOLT', role: 'Kinetic Duelist', color: 0x2979ff, maxHp: 100, speed: 7.6,
-        primary: { name: 'AR-11 Pulse (Ramping AR)', dmg: 24, headMult: 2.0, fireRateMs: 82, mag: 28, reloadMs: 1350, baseSpread: 0.008, moveSpread: 0.036, recoilPitch: 0.023, recoilYaw: 0.01, pellets: 1, noiseRadius: 30, pattern: 'ramping' },
-        secondary: { name: 'Mag-Shot (Wall Ricochet)', dmg: 35, headMult: 2.0, fireRateMs: 260, mag: 8, reloadMs: 1250, baseSpread: 0.004, moveSpread: 0.025, recoilPitch: 0.032, recoilYaw: 0.008, pellets: 1, noiseRadius: 28, pattern: 'ricochet' },
-        defensive: { name: 'Kinetic Deflector (Block + Reload)', cdMs: 14000, durationMs: 1500 },
-        ultimate: { name: 'Chrono Rewind (Recall 2.5s)', cost: 1050, durationMs: 6000 }
-      }
-    };
-
-    const MAPS = {
-      foundry: {
-        id: 'foundry', name: 'The Foundry', subtitle: 'Elevated Metal Catwalks (1.8x Footstep Noise) & Smelting Vat',
-        ambientColor: 0x2a1c17, fogColor: 0x140d0a, floorMat: 'concrete',
-        spawns: [{ x: -22, y: 0, z: -22, yaw: -Math.PI * 0.75 }, { x: 22, y: 0, z: 22, yaw: Math.PI * 0.25 }],
-        structures: [
-          { x: 0, y: 2.5, z: 0, w: 9, h: 5, d: 9, mat: 'metal', color: 0x9a3412 },
-          { x: -14, y: 3.6, z: 0, w: 5, h: 0.4, d: 36, mat: 'metal', color: 0x64748b, walkable: true },
-          { x: 14, y: 3.6, z: 0, w: 5, h: 0.4, d: 36, mat: 'metal', color: 0x64748b, walkable: true },
-          { x: 0, y: 3.6, z: -15, w: 23, h: 0.4, d: 4.5, mat: 'metal', color: 0x64748b, walkable: true },
-          { x: 0, y: 3.6, z: 15, w: 23, h: 0.4, d: 4.5, mat: 'metal', color: 0x64748b, walkable: true },
-          { x: -14, y: 1.8, z: -21, w: 5, h: 3.6, d: 6, mat: 'metal', color: 0x475569, ramp: true },
-          { x: 14, y: 1.8, z: 21, w: 5, h: 3.6, d: 6, mat: 'metal', color: 0x475569, ramp: true },
-          { x: -7, y: 2, z: -8, w: 3, h: 4, d: 3, mat: 'concrete', color: 0x57534e },
-          { x: 7, y: 2, z: 8, w: 3, h: 4, d: 3, mat: 'concrete', color: 0x57534e }
-        ],
-        doors: []
-      },
-      subzero: {
-        id: 'subzero', name: 'Sub-Zero Station', subtitle: 'Tight Lab Corridors, Interactive Blast Doors [F] & Snow Flanks',
-        ambientColor: 0x1e293b, fogColor: 0x0f172a, floorMat: 'snow',
-        spawns: [{ x: -23, y: 0, z: 0, yaw: -Math.PI / 2 }, { x: 23, y: 0, z: 0, yaw: Math.PI / 2 }],
-        structures: [
-          { x: 0, y: 2.5, z: -9, w: 24, h: 5, d: 2, mat: 'metal', color: 0xcbd5e1 },
-          { x: 0, y: 2.5, z: 9, w: 24, h: 5, d: 2, mat: 'metal', color: 0xcbd5e1 },
-          { x: -5, y: 2, z: 0, w: 3, h: 4, d: 3, mat: 'metal', color: 0x0284c7 },
-          { x: 5, y: 2, z: 0, w: 3, h: 4, d: 3, mat: 'metal', color: 0x0284c7 },
-          { x: 0, y: 1.8, z: -20, w: 12, h: 3.6, d: 3.5, mat: 'snow', color: 0xe2e8f0 },
-          { x: 0, y: 1.8, z: 20, w: 12, h: 3.6, d: 3.5, mat: 'snow', color: 0xe2e8f0 }
-        ],
-        doors: [
-          { id: 'cryo_west', x: -12, y: 2.5, z: 0, w: 1.5, h: 5, d: 8, open: false },
-          { id: 'cryo_east', x: 12, y: 2.5, z: 0, w: 1.5, h: 5, d: 8, open: false }
-        ]
-      },
-      overpass: {
-        id: 'overpass', name: 'Overpass Hub', subtitle: 'Elevated Sniper Bridge Balanced by Flank Underpass',
-        ambientColor: 0x1e2430, fogColor: 0x0f131a, floorMat: 'concrete',
-        spawns: [{ x: -24, y: 0, z: -20, yaw: -Math.PI / 2 }, { x: 24, y: 0, z: 20, yaw: Math.PI / 2 }],
-        structures: [
-          { x: 0, y: 3.8, z: -16, w: 40, h: 0.4, d: 7, mat: 'concrete', color: 0x64748b, walkable: true },
-          { x: -22, y: 1.9, z: -16, w: 6, h: 3.8, d: 6, mat: 'concrete', color: 0x475569, ramp: true },
-          { x: 22, y: 1.9, z: -16, w: 6, h: 3.8, d: 6, mat: 'concrete', color: 0x475569, ramp: true },
-          { x: 0, y: 2.2, z: 0, w: 18, h: 4.4, d: 4.5, mat: 'metal', color: 0x0369a1 },
-          { x: -10, y: 2.2, z: 14, w: 12, h: 4.4, d: 2.5, mat: 'concrete', color: 0x334155 },
-          { x: 10, y: 2.2, z: 14, w: 12, h: 4.4, d: 2.5, mat: 'concrete', color: 0x334155 }
-        ],
-        doors: []
-      },
-      sanctuary: {
-        id: 'sanctuary', name: 'The Sanctuary', subtitle: 'Sound-Muffling Grass Courtyard (0.4x Noise) & Creaky Wood Shrine',
-        ambientColor: 0x1a2e22, fogColor: 0x0b160f, floorMat: 'grass',
-        spawns: [{ x: -22, y: 0, z: 22, yaw: -Math.PI / 4 }, { x: 22, y: 0, z: -22, yaw: (3 * Math.PI) / 4 }],
-        structures: [
-          { x: 0, y: 2.2, z: 0, w: 16, h: 0.4, d: 16, mat: 'wood', color: 0x92400e, walkable: true },
-          { x: 0, y: 1.1, z: -10, w: 5, h: 2.2, d: 4, mat: 'wood', color: 0x78350f, ramp: true },
-          { x: 0, y: 1.1, z: 10, w: 5, h: 2.2, d: 4, mat: 'wood', color: 0x78350f, ramp: true },
-          { x: -15, y: 2.2, z: 0, w: 2.5, h: 4.4, d: 14, mat: 'wood', color: 0x7c2d12 },
-          { x: 15, y: 2.2, z: 0, w: 2.5, h: 4.4, d: 14, mat: 'wood', color: 0x7c2d12 }
-        ],
-        doors: []
-      },
-      aegis: {
-        id: 'aegis', name: 'Aegis Bunker', subtitle: 'Central Elevated Control Room & Dynamic Silo Doors [F]',
-        ambientColor: 0x16242c, fogColor: 0x091116, floorMat: 'concrete',
-        spawns: [{ x: 0, y: 0, z: -24, yaw: Math.PI }, { x: 0, y: 0, z: 24, yaw: 0 }],
-        structures: [
-          { x: 0, y: 2.6, z: 0, w: 15, h: 0.4, d: 15, mat: 'metal', color: 0x475569, walkable: true },
-          { x: -9.5, y: 1.3, z: 0, w: 4, h: 2.6, d: 5, mat: 'metal', color: 0x334155, ramp: true },
-          { x: 9.5, y: 1.3, z: 0, w: 4, h: 2.6, d: 5, mat: 'metal', color: 0x334155, ramp: true },
-          { x: -16, y: 2.2, z: -12, w: 3, h: 4.4, d: 10, mat: 'concrete', color: 0x334155 },
-          { x: 16, y: 2.2, z: 12, w: 3, h: 4.4, d: 10, mat: 'concrete', color: 0x334155 }
-        ],
-        doors: [
-          { id: 'silo_north', x: 0, y: 2.5, z: -12, w: 8, h: 5, d: 1.5, open: true },
-          { id: 'silo_south', x: 0, y: 2.5, z: 12, w: 8, h: 5, d: 1.5, open: true }
-        ]
-      }
-    };
-
-    const SURFACE_MULT = { metal: 1.8, wood: 1.6, concrete: 1.0, snow: 0.75, grass: 0.4 };
-
-    // ========================================================================
     // 3. HYBRID SOCKET.IO + GITHUB PAGES SERVERLESS ADAPTER
     // ========================================================================
+    const CLIENT_EVENTS = ['initCatalog', 'matchState', 'doorState', 'worldTick', 'acousticPing', 'hitMarker', 'killFeed', 'matchOver', 'timerSync', 'tracerFx', 'teleport', 'joinError'];
+    const REWIND_MS = 2500;
+
     class HybridSocketAdapter {
       constructor() {
         this.id = 'local_player_1';
@@ -506,35 +381,44 @@
       }
       on(ev, fn) { this.handlers[ev] = fn; }
       triggerClient(ev, data) { if (this.handlers[ev]) this.handlers[ev](data); }
+      setBadge(text, color) {
+        const badge = document.getElementById('netStatusBadge');
+        badge.textContent = text;
+        badge.style.color = color || '#38bdf8';
+      }
 
       initNetwork() {
-        const badge = document.getElementById('netStatusBadge');
         const isStatic = location.hostname.includes('github.io') || location.protocol === 'file:';
         if (!isStatic && typeof io !== 'undefined') {
           const sock = io({ reconnectionAttempts: 1, timeout: 1200 });
+          // Forward server events before connecting so nothing sent on connect is missed
+          CLIENT_EVENTS.forEach((ev) => sock.on(ev, (p) => this.triggerClient(ev, p)));
           sock.on('connect', () => {
             this.mode = 'socketio'; this.id = sock.id; this.realSocket = sock;
-            badge.textContent = 'SOCKET.IO SERVER CONNECTED';
-            ['initCatalog', 'matchState', 'doorState', 'worldTick', 'acousticPing', 'hitMarker', 'killFeed', 'matchOver', 'timerSync', 'tracerFx'].forEach((ev) => {
-              sock.on(ev, (p) => this.triggerClient(ev, p));
-            });
+            this.setBadge('SOCKET.IO SERVER CONNECTED');
           });
-          sock.on('connect_error', () => { sock.close(); this.startServerless(badge); });
+          sock.on('disconnect', () => this.setBadge('SERVER CONNECTION LOST', '#f43f5e'));
+          sock.on('connect_error', () => {
+            if (this.realSocket) return; // Transient reconnect failure; keep the server session
+            sock.close();
+            this.startServerless();
+          });
         } else {
-          this.startServerless(badge);
+          this.startServerless();
         }
       }
 
-      startServerless(badge) {
+      startServerless() {
         this.mode = 'serverless';
-        badge.textContent = 'GITHUB PAGES ENGINE READY';
+        this.setBadge('GITHUB PAGES ENGINE READY');
         this.triggerClient('initCatalog', { heroes: HEROES, maps: MAPS });
       }
 
       emit(ev, data) {
         if (this.mode === 'socketio' && this.realSocket) { this.realSocket.emit(ev, data); return; }
-        if (this.mode === 'p2p-client' && this.peerConn && this.peerConn.open) {
-          this.peerConn.send({ event: ev, data, senderId: this.id }); return;
+        if (this.mode === 'p2p-client') {
+          if (this.peerConn && this.peerConn.open) this.peerConn.send({ event: ev, data, senderId: this.id });
+          return;
         }
         this.handleServerEvent(this.id, ev, data);
       }
@@ -544,10 +428,10 @@
         if (this.peerConn && this.peerConn.open) this.peerConn.send({ event: ev, payload });
       }
 
-      createPlayer(id, name, heroId, spawn, isBot) {
+      createPlayer(id, name, heroId, spawn, isBot, spawnIdx) {
         const h = HEROES[heroId] || HEROES.vex;
         return {
-          id, name, isBot, heroId: h.id,
+          id, name, isBot, heroId: h.id, spawnIdx,
           x: spawn.x, y: spawn.y, z: spawn.z, yaw: spawn.yaw || 0, pitch: 0,
           stance: 'stand', hp: h.maxHp, maxHp: h.maxHp, armor: 0,
           stocks: 3, kills: 0, deaths: 0, weaponSlot: 'primary',
@@ -555,27 +439,79 @@
           reloadingUntil: 0, defCdUntil: 0, defActiveUntil: 0,
           ultCharge: 300, ultMax: h.ultimate.cost, ultActiveUntil: 0,
           slowedUntil: 0, blackoutUntil: 0, revealedUntil: 0,
-          lastShotAt: 0, lastStepAt: 0, history: [], patrolAngle: 0
+          lastShotAt: 0, lastStepAt: 0, stepDist: 0, tpSeq: 0, history: [], patrolAngle: 0
         };
       }
 
+      // Server-side position change (dash, rewind, respawn): the owning client must adopt it,
+      // and any of its moveUpdates still in flight from before the teleport are discarded.
+      teleport(p) {
+        p.tpSeq++;
+        p.history = [];
+        this.broadcast('teleport', { id: p.id, x: p.x, y: p.y, z: p.z, yaw: p.yaw, seq: p.tpSeq });
+      }
+
+      sendMatchState() {
+        this.broadcast('matchState', {
+          roomId: this.room.id, mapId: this.room.mapId, mode: this.room.mode,
+          timeRemaining: this.room.timeRemaining, doors: this.room.doors, players: publicPlayers(this.room.players)
+        });
+      }
+
       setupP2P(roomId, role, joinPayload) {
-        if (typeof Peer === 'undefined') return;
+        if (typeof Peer === 'undefined') {
+          if (role === 'join') { alert('P2P library failed to load, cannot join a friend\'s room.'); location.reload(); }
+          return;
+        }
         const cleanId = 'pduel-room-' + roomId.replace(/[^a-z0-9]/gi, '').toLowerCase();
         if (role === 'host') {
           this.peer = new Peer(cleanId);
+          this.peer.on('open', () => this.setBadge(`HOSTING P2P ROOM "${roomId}"`));
+          this.peer.on('error', (err) => {
+            if (err.type === 'unavailable-id') this.setBadge(`ROOM "${roomId}" IS TAKEN, PICK ANOTHER ROOM ID TO HOST 1v1`, '#f59e0b');
+            else this.setBadge('P2P OFFLINE (SOLO ONLY)', '#f59e0b');
+          });
+          // Losing the signalling broker (network blip, background-tab throttling) makes the room
+          // unjoinable; keep re-registering the room ID so a friend can still connect.
+          this.peer.on('disconnected', () => {
+            this.setBadge('P2P RECONNECTING...', '#f59e0b');
+            setTimeout(() => { if (this.peer && !this.peer.destroyed && this.peer.disconnected) this.peer.reconnect(); }, 1500);
+          });
           this.peer.on('connection', (conn) => {
+            if (this.peerConn && this.peerConn.open) {
+              // Room already has an opponent: refuse the extra connection
+              conn.on('open', () => { conn.send({ event: 'joinError', payload: 'Room is full (1v1).' }); setTimeout(() => conn.close(), 300); });
+              return;
+            }
             this.peerConn = conn;
-            conn.on('data', (msg) => { if (msg.event) this.handleServerEvent(msg.senderId || 'peer_2', msg.event, msg.data); });
+            conn.on('data', (msg) => { if (msg && msg.event) this.handleServerEvent('peer_2', msg.event, msg.data); });
+            conn.on('close', () => {
+              if (this.peerConn === conn) this.peerConn = null;
+              if (this.room && this.room.players.peer_2) {
+                delete this.room.players.peer_2;
+                this.sendMatchState();
+              }
+            });
           });
         } else {
           this.mode = 'p2p-client'; this.id = 'peer_2';
+          this.setBadge('CONNECTING TO HOST...');
           this.peer = new Peer();
+          this.peer.on('error', (err) => {
+            alert(err.type === 'peer-unavailable'
+              ? `No host found for room "${roomId}". Ask your friend to start hosting first, then join with the same Room ID.`
+              : `P2P connection failed (${err.type}).`);
+            location.reload();
+          });
           this.peer.on('open', () => {
-            const conn = this.peer.connect(cleanId);
+            const conn = this.peer.connect(cleanId, { reliable: true });
             this.peerConn = conn;
-            conn.on('open', () => conn.send({ event: 'joinMatch', data: joinPayload, senderId: this.id }));
-            conn.on('data', (msg) => { if (msg.event) this.triggerClient(msg.event, msg.payload); });
+            conn.on('open', () => {
+              this.setBadge('CONNECTED TO HOST');
+              conn.send({ event: 'joinMatch', data: joinPayload, senderId: this.id });
+            });
+            conn.on('data', (msg) => { if (msg && msg.event) this.triggerClient(msg.event, msg.payload); });
+            conn.on('close', () => { alert('Host left the match.'); location.reload(); });
           });
         }
       }
@@ -595,19 +531,22 @@
             this.startLoop();
           }
           const map = MAPS[this.room.mapId];
-          const idx = Object.keys(this.room.players).length % 2;
-          this.room.players[pid] = this.createPlayer(pid, data.playerName, data.heroId, map.spawns[idx], false);
+          const humans = Object.values(this.room.players).filter((p) => !p.isBot && p.id !== pid);
+          if (humans.length >= 2) { this.broadcast('joinError', 'Room is full (1v1).'); return; }
 
-          if (data.spawnBot && Object.keys(this.room.players).length < 2) {
+          // A real opponent replaces the AI, and takes whichever spawn the other human isn't using
+          if (humans.length > 0) delete this.room.players.bot_1;
+          const idx = humans.length > 0 ? 1 - (humans[0].spawnIdx || 0) : 0;
+          this.room.players[pid] = this.createPlayer(pid, data.playerName, data.heroId, map.spawns[idx], false, idx);
+
+          if (data.spawnBot && humans.length === 0) {
             const pool = Object.keys(HEROES).filter((k) => k !== data.heroId);
             const bHero = pool[Math.floor(Math.random() * pool.length)];
-            this.room.players['bot_1'] = this.createPlayer('bot_1', `AI // ${HEROES[bHero].name}`, bHero, map.spawns[1], true);
+            this.room.players.bot_1 = this.createPlayer('bot_1', `AI // ${HEROES[bHero].name}`, bHero, map.spawns[1 - idx], true, 1 - idx);
           }
 
-          this.broadcast('matchState', {
-            roomId: this.room.id, mapId: this.room.mapId, mode: this.room.mode,
-            timeRemaining: this.room.timeRemaining, doors: this.room.doors, players: this.room.players
-          });
+          this.sendMatchState();
+          return;
         }
 
         if (!this.room || this.room.over) return;
@@ -617,26 +556,33 @@
         const hero = HEROES[p.heroId];
 
         if (ev === 'moveUpdate') {
+          if ((data.tpSeq || 0) !== p.tpSeq) return; // Sent before a teleport landed: stale
           const dist = Math.hypot(data.x - p.x, data.z - p.z);
-          p.x = data.x; p.y = data.y; p.z = data.z;
-          p.yaw = data.yaw; p.pitch = data.pitch; p.stance = data.stance;
+          p.x = Math.max(-PHYS.ARENA_LIMIT, Math.min(PHYS.ARENA_LIMIT, data.x));
+          p.y = Math.max(0, Math.min(10, data.y));
+          p.z = Math.max(-PHYS.ARENA_LIMIT, Math.min(PHYS.ARENA_LIMIT, data.z));
+          p.yaw = data.yaw; p.pitch = data.pitch; p.stance = data.stance || 'stand';
           p.history.push({ t: now, x: p.x, y: p.y, z: p.z, hp: p.hp });
-          if (p.history.length > 50) p.history.shift();
+          while (p.history.length && now - p.history[0].t > REWIND_MS) p.history.shift();
 
-          if (dist > 0.05 && p.stance !== 'crouch') {
-            const base = p.stance === 'walk' ? 5.0 : 18.0;
-            if (now - p.lastStepAt > (p.stance === 'walk' ? 480 : 290)) {
-              p.lastStepAt = now;
-              this.emitNoise(p, base, 'footstep');
+          // Footsteps from distance travelled, independent of how often updates arrive
+          if (p.stance === 'crouch') {
+            p.stepDist = 0;
+          } else {
+            p.stepDist += dist;
+            if (p.stepDist > 0.4 && now - p.lastStepAt > (p.stance === 'walk' ? 480 : 290)) {
+              p.lastStepAt = now; p.stepDist = 0;
+              this.emitNoise(p, p.stance === 'walk' ? 5.0 : 18.0, 'footstep');
             }
           }
         } else if (ev === 'switchWeapon') {
           p.weaponSlot = data === 'secondary' ? 'secondary' : 'primary';
         } else if (ev === 'reloadWeapon') {
-          const w = hero[p.weaponSlot];
-          if (now < p.reloadingUntil || p.ammo[p.weaponSlot] === w.mag) return;
+          const slot = p.weaponSlot;
+          const w = hero[slot];
+          if (now < p.reloadingUntil || p.ammo[slot] === w.mag) return;
           p.reloadingUntil = now + w.reloadMs;
-          setTimeout(() => { if (this.room && this.room.players[pid]) this.room.players[pid].ammo[p.weaponSlot] = w.mag; }, w.reloadMs);
+          setTimeout(() => { if (this.room && this.room.players[pid]) this.room.players[pid].ammo[slot] = w.mag; }, w.reloadMs);
         } else if (ev === 'toggleDoor') {
           this.room.doors.forEach((d) => {
             if (Math.hypot(p.x - d.x, p.z - d.z) <= 8.5) {
@@ -652,7 +598,7 @@
             if (p.heroId === 'vex') {
               const stepPos = slideMove(this.room.mapId, this.room.doors, this.room.deployables, p.x, p.y, p.z, -Math.sin(p.yaw) * 6.0, -Math.cos(p.yaw) * 6.0);
               p.x = stepPos.x; p.z = stepPos.z;
-              if (pid === this.id) { localPlayer.x = p.x; localPlayer.z = p.z; }
+              this.teleport(p);
             } else if (p.heroId === 'cipher') {
               this.room.deployables.push({ id: 'smk_' + now, type: 'smoke', x: p.x - Math.sin(p.yaw) * 6.5, y: p.y + 1.8, z: p.z - Math.cos(p.yaw) * 6.5, w: 8.5, h: 3.8, d: 3.0, expiresAt: now + 6000 });
             } else if (p.heroId === 'bastion') {
@@ -672,7 +618,7 @@
             if (p.heroId === 'volt' && p.history.length > 0) {
               const snap = p.history[0];
               p.x = snap.x; p.y = snap.y; p.z = snap.z; p.hp = Math.max(p.hp, snap.hp);
-              if (pid === this.id) { localPlayer.x = p.x; localPlayer.y = p.y; localPlayer.z = p.z; }
+              this.teleport(p);
             }
           }
         } else if (ev === 'fireWeapon') {
@@ -681,8 +627,8 @@
           p.ammo[p.weaponSlot]--;
           this.emitNoise(p, w.noiseRadius, 'gunfire');
           const pellets = w.pellets || 1;
+          const sp = Math.max(w.baseSpread, Math.min(0.4, Number(data.spread) || 0));
           for (let i = 0; i < pellets; i++) {
-            const sp = data.spread;
             const rx = data.dir.x + (Math.random() - 0.5) * sp;
             const ry = data.dir.y + (Math.random() - 0.5) * sp;
             const rz = data.dir.z + (Math.random() - 0.5) * sp;
@@ -703,29 +649,10 @@
         });
       }
 
-      intersectAABB(orig, dir, box) {
-        const minX = box.x - box.w / 2, maxX = box.x + box.w / 2;
-        const minY = box.y - box.h / 2, maxY = box.y + box.h / 2;
-        const minZ = box.z - box.d / 2, maxZ = box.z + box.d / 2;
-        let tmin = -Infinity, tmax = Infinity;
-        const axes = [[orig.x, dir.x, minX, maxX], [orig.y, dir.y, minY, maxY], [orig.z, dir.z, minZ, maxZ]];
-        for (const [o, d, mn, mx] of axes) {
-          if (Math.abs(d) > 1e-6) {
-            let t1 = (mn - o) / d, t2 = (mx - o) / d;
-            if (t1 > t2) [t1, t2] = [t2, t1];
-            tmin = Math.max(tmin, t1); tmax = Math.min(tmax, t2);
-            if (tmin > tmax) return null;
-          } else if (o < mn || o > mx) return null;
-        }
-        return tmax >= 0 ? (tmin >= 0 ? tmin : tmax) : null;
-      }
-
       raycastShot(shooter, weapon, orig, dir, mult) {
-        const map = MAPS[this.room.mapId];
         let wallDist = 65;
-        const blocks = [...map.structures, ...this.room.doors.filter((d) => !d.open), ...this.room.deployables.filter((d) => d.type === 'barrier')];
-        blocks.forEach((b) => {
-          const t = this.intersectAABB(orig, dir, b);
+        getSolids(this.room.mapId, this.room.doors, this.room.deployables).forEach((b) => {
+          const t = intersectSolid(orig, dir, b);
           if (t !== null && t < wallDist) wallDist = t;
         });
 
@@ -733,7 +660,7 @@
         Object.values(this.room.players).forEach((t) => {
           if (t.id === shooter.id) return;
           const box = { x: t.x, y: t.y + 0.9, z: t.z, w: 0.95, h: 1.8, d: 0.95 };
-          const d = this.intersectAABB(orig, dir, box);
+          const d = intersectAABB(orig, dir, box);
           if (d !== null && d < hitDist) {
             hitDist = d; hitTarget = t;
             head = (orig.y + dir.y * d) >= t.y + 1.38;
@@ -756,7 +683,8 @@
           const dmg = Math.round(weapon.dmg * (head ? weapon.headMult : 1.0) * mult);
           this.applyDmg(shooter, hitTarget, dmg, weapon.name, head);
         } else if (weapon.pattern === 'ricochet' && mult === 1.0 && wallDist < 60) {
-          this.raycastShot(shooter, weapon, endPt, { x: -dir.x, y: dir.y, z: -dir.z }, 1.3);
+          const back = { x: endPt.x - dir.x * 0.05, y: endPt.y - dir.y * 0.05, z: endPt.z - dir.z * 0.05 };
+          this.raycastShot(shooter, weapon, back, { x: -dir.x, y: dir.y, z: -dir.z }, 1.3);
         }
       }
 
@@ -784,10 +712,11 @@
           const s0 = map.spawns[0], s1 = map.spawns[1];
           const sp = Math.hypot(attacker.x - s0.x, attacker.z - s0.z) > Math.hypot(attacker.x - s1.x, attacker.z - s1.z) ? s0 : s1;
           victim.hp = victim.maxHp; victim.armor = 0;
-          victim.x = sp.x; victim.y = sp.y; victim.z = sp.z;
+          victim.x = sp.x; victim.y = sp.y; victim.z = sp.z; victim.yaw = sp.yaw;
           victim.ammo.primary = HEROES[victim.heroId].primary.mag;
           victim.ammo.secondary = HEROES[victim.heroId].secondary.mag;
-          if (victim.id === this.id) { localPlayer.x = sp.x; localPlayer.y = sp.y; localPlayer.z = sp.z; }
+          victim.reloadingUntil = 0;
+          this.teleport(victim);
         }
       }
 
@@ -800,7 +729,7 @@
           Object.values(this.room.players).forEach((p) => {
             p.ultCharge = Math.min(p.ultMax, p.ultCharge + 0.7);
             if (p.isBot) {
-              const target = this.room.players[this.id];
+              const target = Object.values(this.room.players).find((h) => !h.isBot);
               if (!target) return;
               const dx = target.x - p.x, dz = target.z - p.z;
               const dist = Math.hypot(dx, dz) || 1;
@@ -810,9 +739,8 @@
               const eye = { x: p.x, y: p.y + 1.5, z: p.z };
               const aimDir = { x: dx / dist, y: (target.y - p.y) / dist, z: dz / dist };
               let wallBlocked = false;
-              const map = MAPS[this.room.mapId];
-              for (const b of [...map.structures, ...this.room.doors.filter((d) => !d.open)]) {
-                const t = this.intersectAABB(eye, aimDir, b);
+              for (const b of getSolids(this.room.mapId, this.room.doors, this.room.deployables)) {
+                const t = intersectSolid(eye, aimDir, b);
                 if (t !== null && t < dist) { wallBlocked = true; break; }
               }
 
@@ -826,7 +754,7 @@
               }
               const nextPos = slideMove(this.room.mapId, this.room.doors, this.room.deployables, p.x, p.y, p.z, moveX, moveZ);
               p.x = nextPos.x; p.z = nextPos.z;
-              p.y = getFloorElevation(map, p.x, p.z);
+              p.y = getFloorElevation(this.room.mapId, this.room.doors, this.room.deployables, p.x, p.y, p.z);
 
               if (now - p.lastStepAt > 420) {
                 p.lastStepAt = now;
@@ -847,7 +775,7 @@
               }
             }
           });
-          this.broadcast('worldTick', { players: this.room.players, deployables: this.room.deployables });
+          this.broadcast('worldTick', { players: publicPlayers(this.room.players), deployables: this.room.deployables });
         }, 50);
 
         setInterval(() => {
@@ -861,56 +789,6 @@
           }
         }, 1000);
       }
-    }
-
-    // ========================================================================
-    // 4. REAL SLIDING WALL COLLISION & ELEVATION PHYSICS HELPERS
-    // ========================================================================
-    function getFloorElevation(map, x, z) {
-      let targetFloor = 0;
-      map.structures.forEach((s) => {
-        if (Math.abs(x - s.x) <= s.w / 2 + 0.3 && Math.abs(z - s.z) <= s.d / 2 + 0.3) {
-          if (s.walkable) targetFloor = Math.max(targetFloor, s.y + s.h / 2);
-          else if (s.ramp) targetFloor = Math.max(targetFloor, 2.0);
-        }
-      });
-      return targetFloor;
-    }
-
-    function getSurfaceAt(map, x, y, z) {
-      for (const s of map.structures) {
-        if ((s.walkable || s.ramp) && Math.abs(x - s.x) <= s.w / 2 && Math.abs(z - s.z) <= s.d / 2 && y >= s.y - 1.5) {
-          return s.mat;
-        }
-      }
-      return map.floorMat;
-    }
-
-    function collidesAt(mapId, doors, deployables, x, y, z) {
-      const r = 0.45; // Player physical radius
-      if (Math.abs(x) > 28.2 || Math.abs(z) > 28.2) return true;
-      const map = MAPS[mapId];
-      const obstacles = [
-        ...map.structures.filter((s) => !s.walkable && !s.ramp),
-        ...(doors || []).filter((d) => !d.open),
-        ...(deployables || []).filter((d) => d.type === 'barrier')
-      ];
-      for (const b of obstacles) {
-        if (y + 1.6 > b.y - b.h / 2 && y < b.y + b.h / 2) {
-          if (x + r > b.x - b.w / 2 && x - r < b.x + b.w / 2 &&
-              z + r > b.z - b.d / 2 && z - r < b.z + b.d / 2) {
-            return true;
-          }
-        }
-      }
-      return false;
-    }
-
-    function slideMove(mapId, doors, deployables, x, y, z, dx, dz) {
-      let nx = x, nz = z;
-      if (!collidesAt(mapId, doors, deployables, x + dx, y, z)) nx = x + dx;
-      if (!collidesAt(mapId, doors, deployables, nx, y, z + dz)) nz = z + dz;
-      return { x: nx, z: nz };
     }
 
     // ========================================================================
@@ -965,12 +843,24 @@
       currentSpread: 0.005,
       stance: 'stand', crouchToggle: false, grounded: true,
       keys: {}, firing: false, lastFireTime: 0,
-      joyX: 0, joyY: 0, joyMag: 0, walkCycle: 0
+      joyX: 0, joyY: 0, joyMag: 0, walkCycle: 0,
+      prevX: 0, prevY: 0, prevZ: 0, moveSpeed: 0,
+      tpSeq: 0, lastNetSend: 0
     };
+
+    function placeLocalPlayer(x, y, z, yaw) {
+      localPlayer.x = localPlayer.prevX = x;
+      localPlayer.y = localPlayer.prevY = y;
+      localPlayer.z = localPlayer.prevZ = z;
+      if (yaw !== undefined) localPlayer.yaw = yaw;
+      localPlayer.vx = localPlayer.vy = localPlayer.vz = 0;
+      localPlayer.grounded = true;
+    }
 
     // Build Pre-Match Lobby
     socket.on('initCatalog', (data) => {
       catalog = data;
+      document.getElementById('deployBtn').disabled = false;
       const heroGrid = document.getElementById('heroGrid');
       heroGrid.innerHTML = '';
       Object.values(catalog.heroes).forEach((h) => {
@@ -1063,6 +953,16 @@
       // Map Structures with Edge Outlines so corridors & ramps are unmistakable
       map.structures.forEach((s) => {
         const geo = new THREE.BoxGeometry(s.w, s.h, s.d);
+        if (s.ramp) {
+          // Collapse the top vertices on the low end of the slope down to the base
+          const pos = geo.attributes.position;
+          const alongSlope = s.slope[1] === 'x' ? (i) => pos.getX(i) : (i) => pos.getZ(i);
+          const sign = s.slope[0] === '+' ? 1 : -1;
+          for (let i = 0; i < pos.count; i++) {
+            if (pos.getY(i) > 0 && alongSlope(i) * sign < 0) pos.setY(i, -s.h / 2);
+          }
+          geo.computeVertexNormals();
+        }
         const mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color: s.color }));
         mesh.position.set(s.x, s.y, s.z);
         const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geo), new THREE.LineBasicMaterial({ color: s.ramp ? 0x38bdf8 : 0x0f172a }));
@@ -1080,14 +980,29 @@
     }
 
     socket.on('matchState', (state) => {
+      const firstState = !roomState || roomState.mapId !== state.mapId;
       roomState = state;
-      buildArenaScene(state.mapId, state.doors);
+      if (firstState) buildArenaScene(state.mapId, state.doors);
       const me = state.players[socket.id];
-      if (me) {
-        localPlayer.x = me.x; localPlayer.y = me.y; localPlayer.z = me.z; localPlayer.yaw = me.yaw;
+      if (me && firstState) {
+        placeLocalPlayer(me.x, me.y, me.z, me.yaw);
+        localPlayer.pitch = 0;
+        localPlayer.tpSeq = me.tpSeq || 0;
         gunBody.material.color.setHex(HEROES[me.heroId].color);
       }
       document.getElementById('hudMapName').textContent = catalog.maps[state.mapId].name.toUpperCase();
+    });
+
+    // Authority moved us (dash, rewind, respawn)
+    socket.on('teleport', ({ id, x, y, z, yaw, seq }) => {
+      if (id !== socket.id) return;
+      placeLocalPlayer(x, y, z, yaw);
+      localPlayer.tpSeq = seq;
+    });
+
+    socket.on('joinError', (msg) => {
+      alert(`Could not join: ${msg}`);
+      location.reload();
     });
 
     socket.on('doorState', (doors) => {
@@ -1121,6 +1036,10 @@
       const me = players[socket.id];
       if (me) updateHUD(me, players, now);
 
+      Object.keys(opponentMeshes).forEach((id) => {
+        if (!players[id] || id === socket.id) { scene.remove(opponentMeshes[id].group); delete opponentMeshes[id]; }
+      });
+
       Object.values(players).forEach((p) => {
         if (p.id === socket.id) return;
         if (!opponentMeshes[p.id]) {
@@ -1135,11 +1054,14 @@
           gun.position.set(0.32, 1.05, -0.35);
           group.add(body, head, visor, gun);
           scene.add(group);
+          group.position.set(p.x, p.y, p.z);
+          group.rotation.y = p.yaw;
           opponentMeshes[p.id] = { group, body };
         }
         const m = opponentMeshes[p.id];
-        m.group.position.set(p.x, p.y, p.z);
-        m.group.rotation.y = p.yaw;
+        // Network target; animate() eases the mesh toward it between 20 Hz ticks
+        m.target = { x: p.x, y: p.y, z: p.z, yaw: p.yaw };
+        if (m.group.position.distanceTo(new THREE.Vector3(p.x, p.y, p.z)) > 4) m.group.position.set(p.x, p.y, p.z);
         const cloaked = p.heroId === 'sable' && now < p.defActiveUntil && now >= p.revealedUntil;
         m.body.material.transparent = true;
         m.body.material.opacity = cloaked ? 0.18 : 1.0;
@@ -1224,19 +1146,44 @@
     // ========================================================================
     // 6. INPUT HANDLERS (PC MOUSE/KB + iPAD MULTI-TOUCH)
     // ========================================================================
+    // Movement is bound to physical key positions (e.code) so WASD works on any layout (AZERTY = ZQSD);
+    // action keys use the printed letter so the HUD labels stay correct.
+    const MOVE_CODES = {
+      KeyW: 'fwd', ArrowUp: 'fwd', KeyS: 'back', ArrowDown: 'back',
+      KeyA: 'left', ArrowLeft: 'left', KeyD: 'right', ArrowRight: 'right',
+      ShiftLeft: 'walk', ShiftRight: 'walk', KeyC: 'crouch', ControlLeft: 'crouch'
+    };
+    const inMatch = () => document.getElementById('lobby').style.display === 'none';
+
+    function tryJump() {
+      if (localPlayer.grounded) { localPlayer.vy = 0.17; localPlayer.grounded = false; }
+    }
+
     window.addEventListener('keydown', (e) => {
       sfx.init();
+      if (!inMatch() || e.target.tagName === 'INPUT') return;
+      const move = MOVE_CODES[e.code];
+      if (move) localPlayer.keys[move] = true;
+      if (move || e.code === 'Space') e.preventDefault(); // No page scrolling / Ctrl shortcuts mid-fight
+      if (e.code === 'Space') tryJump();
+      if (e.repeat) return;
       const k = e.key.toLowerCase();
-      localPlayer.keys[k] = true;
       if (k === '1') socket.emit('switchWeapon', 'primary');
       if (k === '2') socket.emit('switchWeapon', 'secondary');
       if (k === 'r') socket.emit('reloadWeapon');
       if (k === 'e') socket.emit('useAbility', 'defensive');
       if (k === 'q') socket.emit('useAbility', 'ultimate');
       if (k === 'f') socket.emit('toggleDoor');
-      if (k === ' ' && localPlayer.grounded) { localPlayer.vy = 0.17; localPlayer.grounded = false; }
     });
-    window.addEventListener('keyup', (e) => { localPlayer.keys[e.key.toLowerCase()] = false; });
+    window.addEventListener('keyup', (e) => {
+      const move = MOVE_CODES[e.code];
+      if (move) localPlayer.keys[move] = false;
+    });
+    // Releasing keys while the tab is unfocused never fires keyup: clear them so we don't run forever
+    function releaseAllInput() { localPlayer.keys = {}; localPlayer.firing = false; }
+    window.addEventListener('blur', releaseAllInput);
+    document.addEventListener('visibilitychange', () => { if (document.hidden) releaseAllInput(); });
+    document.addEventListener('pointerlockchange', () => { if (document.pointerLockElement !== canvas) localPlayer.firing = false; });
 
     window.addEventListener('mousemove', (e) => {
       if (document.pointerLockElement !== canvas) return;
@@ -1301,7 +1248,9 @@
         lastLX = t.clientX; lastLY = t.clientY;
       }
     }, { passive: false });
-    lookZone.addEventListener('touchend', (e) => { for (const t of e.changedTouches) if (t.identifier === lookTouchId) lookTouchId = null; });
+    function endLook(e) { for (const t of e.changedTouches) if (t.identifier === lookTouchId) lookTouchId = null; }
+    lookZone.addEventListener('touchend', endLook);
+    lookZone.addEventListener('touchcancel', endLook);
 
     function bindBtn(id, downFn, upFn) {
       const b = document.getElementById(id);
@@ -1316,7 +1265,7 @@
       localPlayer.crouchToggle = !localPlayer.crouchToggle;
       document.getElementById('btnCrouch').classList.toggle('active-toggle', localPlayer.crouchToggle);
     });
-    bindBtn('btnJump', () => { if (localPlayer.grounded) { localPlayer.vy = 0.17; localPlayer.grounded = false; } });
+    bindBtn('btnJump', tryJump);
     bindBtn('btnReload', () => socket.emit('reloadWeapon'));
     bindBtn('btnSwap', () => {
       if (!roomState || !roomState.players[socket.id]) return;
@@ -1378,30 +1327,25 @@
     const minimapCtx = document.getElementById('minimapCanvas').getContext('2d');
     let lastLocalStepSound = 0;
 
-    function animate() {
-      requestAnimationFrame(animate);
-      if (!roomState || !roomState.players[socket.id]) return;
-      const now = Date.now();
-      const me = roomState.players[socket.id];
-      const hero = catalog.heroes[me.heroId];
-      const map = catalog.maps[roomState.mapId];
+    // Physics runs at a fixed 60 Hz regardless of monitor refresh rate (all tuning constants are per-60Hz-tick);
+    // rendering interpolates between ticks so 120/144 Hz screens stay smooth.
+    const PHYSICS_DT = 1000 / 60;
+    const NET_SEND_MS = 33;
+    let physicsAccumulator = 0;
+    let lastFrameTime = performance.now();
 
-      // 1. Stance & Surface Noise Calculation
-      const isCrouching = localPlayer.keys['c'] || localPlayer.keys['control'] || localPlayer.crouchToggle;
+    function stepPhysics(me, hero, map, now) {
+      localPlayer.prevX = localPlayer.x;
+      localPlayer.prevY = localPlayer.y;
+      localPlayer.prevZ = localPlayer.z;
+
+      // 1. Stance (keyboard crouch/walk or partial joystick tilt)
+      const keys = localPlayer.keys;
+      const isCrouching = keys.crouch || localPlayer.crouchToggle;
       const isTouchWalk = localPlayer.joyMag > 0.05 && localPlayer.joyMag < 0.55;
-      const surface = getSurfaceAt(map, localPlayer.x, localPlayer.y, localPlayer.z);
-      document.getElementById('hudSurfaceText').textContent = `Surface: ${surface.toUpperCase()} (${SURFACE_MULT[surface]}x noise)`;
-
-      if (isCrouching) {
-        localPlayer.stance = 'crouch';
-        document.getElementById('hudStance').textContent = 'CROUCH (SILENT)';
-      } else if (localPlayer.keys['shift'] || isTouchWalk) {
-        localPlayer.stance = 'walk';
-        document.getElementById('hudStance').textContent = 'WALK (QUIET)';
-      } else {
-        localPlayer.stance = 'stand';
-        document.getElementById('hudStance').textContent = 'SPRINT (LOUD)';
-      }
+      if (isCrouching) localPlayer.stance = 'crouch';
+      else if (keys.walk || isTouchWalk) localPlayer.stance = 'walk';
+      else localPlayer.stance = 'stand';
 
       // 2. Acceleration, Friction & Sliding Wall Collision Physics
       let maxSpd = hero.speed * 0.017;
@@ -1411,10 +1355,10 @@
       if (me.heroId === 'sable' && now < me.ultActiveUntil) maxSpd *= 1.25;
 
       let fwd = localPlayer.joyY, str = localPlayer.joyX;
-      if (localPlayer.keys['w']) fwd = 1;
-      if (localPlayer.keys['s']) fwd = -1;
-      if (localPlayer.keys['a']) str = -1;
-      if (localPlayer.keys['d']) str = 1;
+      const kFwd = (keys.fwd ? 1 : 0) - (keys.back ? 1 : 0);
+      const kStr = (keys.right ? 1 : 0) - (keys.left ? 1 : 0);
+      if (keys.fwd || keys.back) fwd = kFwd;
+      if (keys.left || keys.right) str = kStr;
 
       const inputLen = Math.hypot(fwd, str);
       if (inputLen > 1) { fwd /= inputLen; str /= inputLen; }
@@ -1426,41 +1370,84 @@
       localPlayer.vx += (targetVx - localPlayer.vx) * accel;
       localPlayer.vz += (targetVz - localPlayer.vz) * accel;
 
-      const moveSpeed = Math.hypot(localPlayer.vx, localPlayer.vz);
+      const doors = roomState.doors, deps = roomState.deployables;
+      let moveSpeed = Math.hypot(localPlayer.vx, localPlayer.vz);
       if (moveSpeed > 0.002) {
-        const nextPos = slideMove(roomState.mapId, roomState.doors, roomState.deployables, localPlayer.x, localPlayer.y, localPlayer.z, localPlayer.vx, localPlayer.vz);
+        const nextPos = slideMove(roomState.mapId, doors, deps, localPlayer.x, localPlayer.y, localPlayer.z, localPlayer.vx, localPlayer.vz);
+        // Kill velocity into walls so we don't keep "pushing" (and spreading) against them
+        const realDx = nextPos.x - localPlayer.x, realDz = nextPos.z - localPlayer.z;
+        if (Math.abs(realDx) < Math.abs(localPlayer.vx) * 0.5) localPlayer.vx = realDx;
+        if (Math.abs(realDz) < Math.abs(localPlayer.vz) * 0.5) localPlayer.vz = realDz;
         localPlayer.x = nextPos.x;
         localPlayer.z = nextPos.z;
+        moveSpeed = Math.hypot(realDx, realDz);
         localPlayer.walkCycle += moveSpeed * 1.8;
 
-        if (localPlayer.grounded && localPlayer.stance !== 'crouch' && now - lastLocalStepSound > (localPlayer.stance === 'walk' ? 480 : 290)) {
+        const surface = getSurfaceAt(map, localPlayer.x, localPlayer.y, localPlayer.z);
+        if (localPlayer.grounded && moveSpeed > 0.01 && localPlayer.stance !== 'crouch' && now - lastLocalStepSound > (localPlayer.stance === 'walk' ? 480 : 290)) {
           lastLocalStepSound = now;
           sfx.playStep(surface);
         }
       }
+      localPlayer.moveSpeed = moveSpeed;
 
-      // 3. Vertical Gravity & Smooth Ramp/Catwalk Climbing
-      const floorY = getFloorElevation(map, localPlayer.x, localPlayer.z);
-      localPlayer.y += localPlayer.vy;
-      if (localPlayer.y > floorY) {
-        localPlayer.vy -= 0.0085; // Gravity
-      } else {
-        localPlayer.y += (floorY - localPlayer.y) * 0.35; // Smooth step up ramps
-        if (Math.abs(localPlayer.y - floorY) < 0.05) localPlayer.y = floorY;
+      // 3. Gravity, ground snapping (walk down ramps without floating) & ramp/catwalk climbing
+      const floorY = getFloorElevation(roomState.mapId, doors, deps, localPlayer.x, localPlayer.y, localPlayer.z);
+      if (localPlayer.grounded && localPlayer.vy <= 0 && localPlayer.y - floorY <= PHYS.SNAP) {
+        localPlayer.y = floorY;
         localPlayer.vy = 0;
-        localPlayer.grounded = true;
+      } else {
+        localPlayer.vy -= 0.0085; // Gravity
+        localPlayer.y += localPlayer.vy;
+        const ceil = getCeiling(roomState.mapId, doors, deps, localPlayer.x, localPlayer.prevY, localPlayer.z);
+        if (localPlayer.y + PHYS.HEIGHT > ceil) { localPlayer.y = ceil - PHYS.HEIGHT; localPlayer.vy = Math.min(0, localPlayer.vy); }
+        if (localPlayer.y <= floorY) {
+          localPlayer.y = floorY;
+          localPlayer.vy = 0;
+          localPlayer.grounded = true;
+        } else {
+          localPlayer.grounded = false; // Walked off a ledge or jumping: no mid-air jumps
+        }
       }
 
-      // 4. Hooke's Law Spring-Damper Recoil & Velocity Spread Calculation
-      const w = hero[me.weaponSlot];
+      // 4. Hooke's Law Spring-Damper Recoil
       localPlayer.recoilPitch += localPlayer.recoilPitchVel;
       localPlayer.recoilPitchVel -= localPlayer.recoilPitch * 0.18; // Spring stiffness k
       localPlayer.recoilPitchVel *= 0.72; // Damper c
       localPlayer.recoilPitch *= 0.88;
       localPlayer.recoilYaw *= 0.85;
       localPlayer.gunKickZ *= 0.82;
+    }
 
-      const speedRatio = Math.min(1.5, moveSpeed / 0.12);
+    function animate() {
+      requestAnimationFrame(animate);
+      const frameTime = performance.now();
+      const frameMs = Math.min(250, frameTime - lastFrameTime); // Clamp after tab-switch stalls
+      lastFrameTime = frameTime;
+      if (!roomState || !roomState.players[socket.id]) return;
+      const now = Date.now();
+      const me = roomState.players[socket.id];
+      const hero = catalog.heroes[me.heroId];
+      const map = catalog.maps[roomState.mapId];
+
+      physicsAccumulator += frameMs;
+      while (physicsAccumulator >= PHYSICS_DT) {
+        stepPhysics(me, hero, map, now);
+        physicsAccumulator -= PHYSICS_DT;
+      }
+      const alpha = physicsAccumulator / PHYSICS_DT;
+      const renderX = localPlayer.prevX + (localPlayer.x - localPlayer.prevX) * alpha;
+      const renderY = localPlayer.prevY + (localPlayer.y - localPlayer.prevY) * alpha;
+      const renderZ = localPlayer.prevZ + (localPlayer.z - localPlayer.prevZ) * alpha;
+
+      const surface = getSurfaceAt(map, localPlayer.x, localPlayer.y, localPlayer.z);
+      document.getElementById('hudSurfaceText').textContent = `Surface: ${surface.toUpperCase()} (${SURFACE_MULT[surface]}x noise)`;
+      document.getElementById('hudStance').textContent =
+        localPlayer.stance === 'crouch' ? 'CROUCH (SILENT)' : (localPlayer.stance === 'walk' ? 'WALK (QUIET)' : 'SPRINT (LOUD)');
+
+      // Velocity Spread Calculation
+      const w = hero[me.weaponSlot];
+      const speedRatio = Math.min(1.5, localPlayer.moveSpeed / 0.12);
       const airPenalty = localPlayer.grounded ? 0 : 0.06;
       const crouchBonus = localPlayer.stance === 'crouch' ? 0.5 : 1.0;
       localPlayer.currentSpread = (w.baseSpread + w.moveSpread * speedRatio + airPenalty + localPlayer.recoilPitch * 0.25) * crouchBonus;
@@ -1489,16 +1476,33 @@
         return true;
       });
 
+      // Ease opponents toward their latest networked position (hides 20 Hz tick stepping)
+      const ease = 1 - Math.exp(-frameMs / 60);
+      Object.values(opponentMeshes).forEach((m) => {
+        if (!m.target) return;
+        const g = m.group;
+        g.position.x += (m.target.x - g.position.x) * ease;
+        g.position.y += (m.target.y - g.position.y) * ease;
+        g.position.z += (m.target.z - g.position.z) * ease;
+        let dYaw = m.target.yaw - g.rotation.y;
+        dYaw = Math.atan2(Math.sin(dYaw), Math.cos(dYaw)); // Shortest way around
+        g.rotation.y += dYaw * ease;
+      });
+
       // 5. Update Camera & Send State
-      camera.position.set(localPlayer.x, localPlayer.y + (localPlayer.stance === 'crouch' ? 1.05 : 1.6), localPlayer.z);
+      camera.position.set(renderX, renderY + (localPlayer.stance === 'crouch' ? 1.05 : 1.6), renderZ);
       camera.rotation.order = 'YXZ';
       camera.rotation.y = localPlayer.yaw + localPlayer.recoilYaw;
       camera.rotation.x = localPlayer.pitch + localPlayer.recoilPitch;
 
-      socket.emit('moveUpdate', {
-        x: localPlayer.x, y: localPlayer.y, z: localPlayer.z,
-        yaw: localPlayer.yaw, pitch: localPlayer.pitch, stance: localPlayer.stance
-      });
+      if (now - localPlayer.lastNetSend >= NET_SEND_MS) {
+        localPlayer.lastNetSend = now;
+        socket.emit('moveUpdate', {
+          x: localPlayer.x, y: localPlayer.y, z: localPlayer.z,
+          yaw: localPlayer.yaw, pitch: localPlayer.pitch, stance: localPlayer.stance,
+          tpSeq: localPlayer.tpSeq
+        });
+      }
 
       // 6. Floating Enemy Nameplate + Dynamic Tactical Coach Banner
       const opp = Object.values(roomState.players).find((p) => p.id !== socket.id);
