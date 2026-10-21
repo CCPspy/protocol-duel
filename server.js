@@ -13,8 +13,9 @@ app.use(express.static(__dirname));
 // Heroes, maps and movement physics are shared with the browser client so that
 // collision, spawns and weapon stats match exactly on both ends.
 const {
-  HEROES, MAPS, SURFACE_MULT, PHYS, publicPlayers,
-  getSolids, getFloorElevation, getSurfaceAt, slideMove, intersectAABB, intersectSolid
+  HEROES, MAPS, SURFACE_MULT, PHYS, publicPlayers, RESPAWN_MS, pickRespawn, updateBot,
+  ENDLESS_ROUND_SECS, applyHero, rotateMap,
+  getSolids, getSurfaceAt, slideMove, intersectAABB, intersectSolid
 } = require('./shared.js');
 
 const REWIND_MS = 2500;
@@ -51,6 +52,9 @@ function createPlayerState(id, name, heroId, spawn, isBot = false, spawnIdx = 0)
     lastStepAt: 0,
     stepDist: 0,
     tpSeq: 0,       // Bumped on every server-side teleport; stale client moveUpdates are dropped
+    dead: false,    // Eliminated and waiting out the respawn cooldown
+    respawnAt: 0,
+    killedBy: '',
     patrolAngle: 0,
     history: []     // Used for Volt's Chrono Rewind
   };
@@ -62,6 +66,7 @@ function sendMatchState(room) {
     mapId: room.mapId,
     mode: room.mode,
     timeRemaining: room.timeRemaining,
+    round: room.round,
     doors: room.doors,
     players: publicPlayers(room.players)
   });
@@ -116,8 +121,9 @@ io.on('connection', (socket) => {
       rooms[rId] = {
         id: rId,
         mapId: chosenMap,
-        mode: mode === 'timer' ? 'timer' : 'stock',
-        timeRemaining: 180,
+        mode: ['timer', 'endless'].includes(mode) ? mode : 'stock',
+        timeRemaining: mode === 'endless' ? ENDLESS_ROUND_SECS : 180,
+        round: 1,
         suddenDeath: false,
         over: false,
         players: {},
@@ -175,7 +181,7 @@ io.on('connection', (socket) => {
     const room = rooms[socket.roomId];
     if (!room || room.over || !data) return;
     const p = room.players[socket.id];
-    if (!p) return;
+    if (!p || p.dead) return;
     if ((data.tpSeq || 0) !== p.tpSeq) return; // Sent before a teleport reached the client
     if (![data.x, data.y, data.z].every(Number.isFinite)) return;
 
@@ -205,6 +211,22 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Eliminated players redeploy only when they ask to, once the cooldown has elapsed
+  socket.on('requestRespawn', () => {
+    const room = rooms[socket.roomId];
+    const p = room && room.players[socket.id];
+    if (!p || !p.dead || Date.now() < p.respawnAt) return;
+    respawnPlayer(room, p);
+  });
+
+  // Pick a different operative while eliminated
+  socket.on('selectHero', (heroId) => {
+    const room = rooms[socket.roomId];
+    const p = room && room.players[socket.id];
+    if (!p || !p.dead || p.heroId === heroId) return;
+    applyHero(p, heroId);
+  });
+
   socket.on('switchWeapon', (slot) => {
     const room = rooms[socket.roomId];
     if (!room || !room.players[socket.id]) return;
@@ -217,6 +239,7 @@ io.on('connection', (socket) => {
     const room = rooms[socket.roomId];
     if (!room || !room.players[socket.id]) return;
     const p = room.players[socket.id];
+    if (p.dead) return;
     const slot = p.weaponSlot;
     const w = HEROES[p.heroId][slot];
     const now = Date.now();
@@ -231,6 +254,7 @@ io.on('connection', (socket) => {
     const room = rooms[socket.roomId];
     if (!room || !room.players[socket.id]) return;
     const p = room.players[socket.id];
+    if (p.dead) return;
     let changed = false;
     for (const d of room.doors) {
       if (Math.hypot(p.x - d.x, p.z - d.z) <= 8.5) {
@@ -249,6 +273,7 @@ io.on('connection', (socket) => {
     const room = rooms[socket.roomId];
     if (!room || room.over || !room.players[socket.id]) return;
     const p = room.players[socket.id];
+    if (p.dead) return;
     const hero = HEROES[p.heroId];
     const now = Date.now();
 
@@ -294,7 +319,7 @@ io.on('connection', (socket) => {
       // Apply 1v1 turnaround ultimate effects
       for (const pid of Object.keys(room.players)) {
         const target = room.players[pid];
-        if (pid === p.id) continue;
+        if (pid === p.id || target.dead) continue;
         if (p.heroId === 'vex') {
           target.revealedUntil = now + 6500;
         } else if (p.heroId === 'krosh') {
@@ -331,7 +356,7 @@ io.on('connection', (socket) => {
     if (!origin || !dir) return;
     const shooter = room.players[socket.id];
     const now = Date.now();
-    if (now < shooter.reloadingUntil) return;
+    if (shooter.dead || now < shooter.reloadingUntil) return;
 
     const hero = HEROES[shooter.heroId];
     const weapon = hero[shooter.weaponSlot];
@@ -380,8 +405,8 @@ function resolveHitscan(room, shooter, weapon, origin, rayDir, dmgMultiplier) {
   const reach = weapon.pattern === 'wallbang' ? nearestWallDist + 2.5 : nearestWallDist;
 
   for (const pid of Object.keys(room.players)) {
-    if (pid === shooter.id) continue;
     const target = room.players[pid];
+    if (pid === shooter.id || target.dead) continue;
     const bodyBox = { x: target.x, y: target.y + 0.9, z: target.z, w: 0.95, h: 1.8, d: 0.95 };
     const t = intersectAABB(origin, rayDir, bodyBox);
     if (t !== null && t < hitDist && t < reach) {
@@ -422,6 +447,7 @@ function resolveHitscan(room, shooter, weapon, origin, rayDir, dmgMultiplier) {
 
 function applyDamage(room, attacker, victim, dmg, sourceName, isHeadshot = false) {
   const now = Date.now();
+  if (victim.dead) return;
   attacker.ultCharge = Math.min(attacker.ultMax, attacker.ultCharge + dmg * 2.4);
   victim.ultCharge = Math.min(victim.ultMax, victim.ultCharge + dmg * 1.4);
 
@@ -466,72 +492,40 @@ function applyDamage(room, attacker, victim, dmg, sourceName, isHeadshot = false
       return;
     }
 
-    // Respawn at farthest spawn node
-    const map = MAPS[room.mapId];
-    const s0 = map.spawns[0], s1 = map.spawns[1];
-    const d0 = Math.hypot(attacker.x - s0.x, attacker.z - s0.z);
-    const d1 = Math.hypot(attacker.x - s1.x, attacker.z - s1.z);
-    const bestSpawn = d0 > d1 ? s0 : s1;
-
-    victim.hp = victim.maxHp;
-    victim.armor = 0;
-    victim.x = bestSpawn.x; victim.y = bestSpawn.y; victim.z = bestSpawn.z; victim.yaw = bestSpawn.yaw;
-    victim.ammo.primary = HEROES[victim.heroId].primary.mag;
-    victim.ammo.secondary = HEROES[victim.heroId].secondary.mag;
-    victim.reloadingUntil = 0;
-    teleportPlayer(room, victim);
+    // Down for at least RESPAWN_MS; humans then press to respawn, bots return automatically
+    victim.hp = 0;
+    victim.dead = true;
+    victim.respawnAt = now + RESPAWN_MS;
+    victim.killedBy = attacker.name;
+    victim.defActiveUntil = 0;
+    victim.ultActiveUntil = 0;
   }
+}
+
+function respawnPlayer(room, p) {
+  const spawn = pickRespawn(room, p);
+  const hero = HEROES[p.heroId];
+  p.dead = false;
+  p.respawnAt = 0;
+  p.hp = p.maxHp;
+  p.armor = 0;
+  p.x = spawn.x; p.y = spawn.y; p.z = spawn.z; p.yaw = spawn.yaw;
+  p.ammo.primary = hero.primary.mag;
+  p.ammo.secondary = hero.secondary.mag;
+  p.reloadingUntil = 0;
+  p.slowedUntil = 0;
+  p.blackoutUntil = 0;
+  p.botSeenAt = 0;
+  teleportPlayer(room, p);
 }
 
 // ============================================================================
 // 5. SERVER AUTHORITATIVE TICK LOOP (20 Hz State Sync + 1 Hz Match Clock)
 // ============================================================================
-function updateBot(room, p, now) {
-  const target = Object.values(room.players).find((h) => !h.isBot);
-  if (!target) return;
-  const dx = target.x - p.x;
-  const dz = target.z - p.z;
-  const dist = Math.hypot(dx, dz) || 1;
-  p.yaw = Math.atan2(-dx, -dz);
-
-  // Line of sight check against all solid cover
-  const eye = { x: p.x, y: p.y + 1.5, z: p.z };
-  const aimDir = { x: dx / dist, y: (target.y - p.y) / dist, z: dz / dist };
-  let wallBlocked = false;
-  for (const b of getSolids(room.mapId, room.doors, room.deployables)) {
-    const t = intersectSolid(eye, aimDir, b);
-    if (t !== null && t < dist) { wallBlocked = true; break; }
-  }
-
-  // Approach, or circle-strafe when close / blocked, using the same sliding collision as players
-  let moveX = (dx / dist) * 0.19;
-  let moveZ = (dz / dist) * 0.19;
-  if (wallBlocked || dist < 11) {
-    p.patrolAngle += 0.03;
-    moveX = Math.cos(p.patrolAngle) * 0.18 + (dx / dist) * 0.08;
-    moveZ = Math.sin(p.patrolAngle) * 0.18 + (dz / dist) * 0.08;
-  }
-  const next = slideMove(room.mapId, room.doors, room.deployables, p.x, p.y, p.z, moveX, moveZ);
-  p.x = next.x; p.z = next.z;
-  p.y = getFloorElevation(room.mapId, room.doors, room.deployables, p.x, p.y, p.z);
-
-  if (now - p.lastStepAt > 420) {
-    p.lastStepAt = now;
-    emitAcousticPing(room, p, 16, 'footstep');
-  }
-
-  const hero = HEROES[p.heroId];
-  if (!wallBlocked && now - p.lastShotAt > Math.max(550, hero.primary.fireRateMs * 1.5)) {
-    p.lastShotAt = now;
-    emitAcousticPing(room, p, hero.primary.noiseRadius, 'gunfire');
-    const botSpread = 0.045;
-    const rx = aimDir.x + (Math.random() - 0.5) * botSpread;
-    const ry = aimDir.y + (Math.random() - 0.5) * botSpread;
-    const rz = aimDir.z + (Math.random() - 0.5) * botSpread;
-    const l = Math.hypot(rx, ry, rz) || 1;
-    resolveHitscan(room, p, hero.primary, eye, { x: rx / l, y: ry / l, z: rz / l }, 0.65);
-  }
-}
+const botHooks = (room) => ({
+  noise: (p, radius, type) => emitAcousticPing(room, p, radius, type),
+  shoot: (p, weapon, origin, dir, mult) => resolveHitscan(room, p, weapon, origin, dir, mult)
+});
 
 setInterval(() => {
   const now = Date.now();
@@ -542,8 +536,12 @@ setInterval(() => {
     room.deployables = room.deployables.filter((d) => d.expiresAt > now && d.hp > 0);
 
     for (const p of Object.values(room.players)) {
+      if (p.dead) {
+        if (p.isBot && now >= p.respawnAt) respawnPlayer(room, p); // Humans press to respawn
+        continue;
+      }
       p.ultCharge = Math.min(p.ultMax, p.ultCharge + 0.7);
-      if (p.isBot) updateBot(room, p, now);
+      if (p.isBot) updateBot(room, p, now, botHooks(room));
       if (room.over) break;
     }
 
@@ -558,7 +556,18 @@ setInterval(() => {
 setInterval(() => {
   for (const rId of Object.keys(rooms)) {
     const room = rooms[rId];
-    if (room.over || Object.keys(room.players).length < 2) continue;
+    if (room.over) continue;
+    if (room.mode === 'endless') {
+      // Rotate arenas every 5 minutes for as long as anyone is playing
+      room.timeRemaining--;
+      if (room.timeRemaining <= 0) {
+        rotateMap(room);
+        sendMatchState(room);
+      }
+      io.to(rId).emit('timerSync', room.timeRemaining);
+      continue;
+    }
+    if (Object.keys(room.players).length < 2) continue;
     if (room.mode === 'timer') {
       room.timeRemaining--;
       if (room.timeRemaining <= 0) {

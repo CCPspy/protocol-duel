@@ -294,6 +294,172 @@
     return null;
   }
 
+  // ==========================================================================
+  // RESPAWN & AI DUELIST (run by whichever side is authoritative: Node server or P2P host)
+  // ==========================================================================
+  const RESPAWN_MS = 3000;
+
+  // ==========================================================================
+  // ENDLESS MODE MAP ROTATION & HERO SWAPPING
+  // ==========================================================================
+  const ENDLESS_ROUND_SECS = 300; // Each arena lasts 5 minutes
+  const MAP_ORDER = Object.keys(MAPS);
+
+  // Swap a player's operative (allowed while eliminated); takes effect fully on respawn
+  function applyHero(p, heroId) {
+    const h = HEROES[heroId];
+    if (!h) return false;
+    p.heroId = h.id;
+    p.maxHp = h.maxHp;
+    p.ultMax = h.ultimate.cost;
+    p.ultCharge = Math.min(p.ultCharge, p.ultMax);
+    p.weaponSlot = 'primary';
+    p.ammo = { primary: h.primary.mag, secondary: h.secondary.mag };
+    p.reloadingUntil = 0;
+    p.defCdUntil = 0;
+    p.defActiveUntil = 0;
+    p.ultActiveUntil = 0;
+    return true;
+  }
+
+  // Advance to the next arena: fresh doors/deployables, everyone revived at their own side's spawn.
+  // Scores carry over. Caller broadcasts the new match state (which carries each player's new tpSeq).
+  function rotateMap(room) {
+    const next = MAP_ORDER[(MAP_ORDER.indexOf(room.mapId) + 1) % MAP_ORDER.length];
+    const map = MAPS[next];
+    room.mapId = next;
+    room.doors = JSON.parse(JSON.stringify(map.doors));
+    room.deployables = [];
+    room.timeRemaining = ENDLESS_ROUND_SECS;
+    room.round = (room.round || 1) + 1;
+    for (const p of Object.values(room.players)) {
+      const sp = map.spawns[p.spawnIdx || 0];
+      const h = HEROES[p.heroId];
+      p.x = sp.x; p.y = sp.y; p.z = sp.z; p.yaw = sp.yaw;
+      p.dead = false; p.respawnAt = 0;
+      p.hp = p.maxHp; p.armor = 0;
+      p.ammo = { primary: h.primary.mag, secondary: h.secondary.mag };
+      p.reloadingUntil = 0; p.slowedUntil = 0; p.blackoutUntil = 0; p.revealedUntil = 0;
+      p.history = [];
+      p.botSeenAt = 0; p.botLastTarget = null;
+      p.tpSeq++;
+    }
+  }
+
+  // Spawn node farthest from every living opponent
+  function pickRespawn(room, victim) {
+    const map = MAPS[room.mapId];
+    const foes = Object.values(room.players).filter((p) => p.id !== victim.id && !p.dead);
+    let best = map.spawns[0], bestDist = -1;
+    for (const s of map.spawns) {
+      const d = foes.length ? Math.min(...foes.map((f) => Math.hypot(f.x - s.x, f.z - s.z))) : 0;
+      if (d > bestDist) { best = s; bestDist = d; }
+    }
+    return best;
+  }
+
+  const BOT = {
+    REACTION_MS: 700,        // Delay between first seeing you and pulling the trigger
+    REACQUIRE_MS: 350,       // Shorter delay if it only lost sight of you briefly
+    MIN_FIRE_GAP_MS: 950,    // Never shoots faster than this...
+    FIRE_GAP_MULT: 2.4,      // ...or than 2.4x the weapon's own fire interval
+    FIRE_JITTER_MS: 450,     // Random extra delay so its rhythm isn't robotic
+    MAX_RANGE: 34,           // Won't engage beyond this distance
+    NEAR_RANGE: 10,          // Backs off when closer than this...
+    FAR_RANGE: 18,           // ...and closes in when farther than this
+    BASE_SPREAD: 0.07,       // Much looser than a player standing still
+    RANGE_SPREAD: 0.0025,    // Extra spread per metre of distance
+    MOVING_TARGET_SPREAD: 0.06,
+    DMG_MULT: 0.5,
+    PELLET_DMG_MULT: 0.5,    // Extra cut for shotguns, which fire many pellets per shot
+    AIM_HEIGHT: 1.0          // Aims at the chest, not the head
+  };
+
+  // hooks: { noise(p, radius, type), shoot(p, weapon, origin, dir, dmgMult) }
+  function updateBot(room, p, now, hooks) {
+    if (p.dead) return;
+    const target = Object.values(room.players).find((h) => !h.isBot && !h.dead);
+    const hero = HEROES[p.heroId];
+    const w = hero.primary;
+
+    // Finish an in-progress reload (bots never skip the empty-mag window)
+    if (p.reloadingUntil && now >= p.reloadingUntil) { p.ammo.primary = w.mag; p.reloadingUntil = 0; }
+
+    if (!target) { p.botSeenAt = 0; return; } // Opponent respawning: hold position
+    const dx = target.x - p.x;
+    const dz = target.z - p.z;
+    const dist = Math.hypot(dx, dz) || 1;
+    p.yaw = Math.atan2(-dx, -dz);
+
+    // Line of sight check against all solid cover
+    const eye = { x: p.x, y: p.y + 1.5, z: p.z };
+    const aimY = target.y + BOT.AIM_HEIGHT - eye.y;
+    const aimLen = Math.hypot(dx, aimY, dz) || 1;
+    const aimDir = { x: dx / aimLen, y: aimY / aimLen, z: dz / aimLen };
+    let wallBlocked = false;
+    for (const b of getSolids(room.mapId, room.doors, room.deployables)) {
+      const t = intersectSolid(eye, aimDir, b);
+      if (t !== null && t < aimLen) { wallBlocked = true; break; }
+    }
+
+    // Hold a duelling distance instead of charging to point-blank: approach when far, back off when
+    // too close, strafe sideways in between; wander around cover when it has no sight line.
+    const fx = dx / dist, fz = dz / dist;
+    let moveX, moveZ;
+    if (wallBlocked) {
+      p.patrolAngle += 0.03;
+      moveX = Math.cos(p.patrolAngle) * 0.18 + fx * 0.08;
+      moveZ = Math.sin(p.patrolAngle) * 0.18 + fz * 0.08;
+    } else {
+      const radial = dist > BOT.FAR_RANGE ? 0.17 : (dist < BOT.NEAR_RANGE ? -0.14 : 0);
+      if (!p.strafeFlipAt || now > p.strafeFlipAt) {
+        p.strafeDir = Math.random() < 0.5 ? -1 : 1;
+        p.strafeFlipAt = now + 900 + Math.random() * 1600;
+      }
+      const side = 0.11 * p.strafeDir;
+      moveX = fx * radial - fz * side;
+      moveZ = fz * radial + fx * side;
+    }
+    const next = slideMove(room.mapId, room.doors, room.deployables, p.x, p.y, p.z, moveX, moveZ);
+    p.x = next.x; p.z = next.z;
+    p.y = getFloorElevation(room.mapId, room.doors, room.deployables, p.x, p.y, p.z);
+
+    if (now - p.lastStepAt > 420) {
+      p.lastStepAt = now;
+      hooks.noise(p, 16, 'footstep');
+    }
+
+    // Reaction time: track when it acquired the target; brief occlusions get a shorter re-acquire
+    const canSee = !wallBlocked && dist <= BOT.MAX_RANGE;
+    if (canSee) {
+      if (!p.botSeenAt) p.botSeenAt = now + (now - (p.botLostAt || 0) < 1500 ? BOT.REACQUIRE_MS : BOT.REACTION_MS);
+    } else if (p.botSeenAt) {
+      p.botSeenAt = 0; p.botLostAt = now;
+    }
+
+    // Estimate how fast the target is strafing (sampled every tick)
+    const tSpeed = p.botLastTarget ? Math.hypot(target.x - p.botLastTarget.x, target.z - p.botLastTarget.z) : 0;
+    p.botLastTarget = { x: target.x, z: target.z };
+
+    if (!canSee || now < p.botSeenAt || p.reloadingUntil || now < (p.botNextShotAt || 0)) return;
+
+    if (p.ammo.primary <= 0) { p.reloadingUntil = now + w.reloadMs; return; }
+    p.ammo.primary--;
+    p.lastShotAt = now;
+    p.botNextShotAt = now + Math.max(BOT.MIN_FIRE_GAP_MS, w.fireRateMs * BOT.FIRE_GAP_MULT) + Math.random() * BOT.FIRE_JITTER_MS;
+    hooks.noise(p, w.noiseRadius, 'gunfire');
+
+    const spread = BOT.BASE_SPREAD + dist * BOT.RANGE_SPREAD + (tSpeed > 0.1 ? BOT.MOVING_TARGET_SPREAD : 0);
+    for (let i = 0; i < (w.pellets || 1); i++) {
+      const rx = aimDir.x + (Math.random() - 0.5) * spread;
+      const ry = aimDir.y + (Math.random() - 0.5) * spread;
+      const rz = aimDir.z + (Math.random() - 0.5) * spread;
+      const l = Math.hypot(rx, ry, rz) || 1;
+      const mult = BOT.DMG_MULT * ((w.pellets || 1) > 1 ? BOT.PELLET_DMG_MULT : 1);
+      hooks.shoot(p, w, eye, { x: rx / l, y: ry / l, z: rz / l }, mult);
+    }
+  }
+
   // Network-safe copy of the player table (rewind history stays on the authority)
   function publicPlayers(players) {
     const out = {};
@@ -305,7 +471,8 @@
   }
 
   return {
-    HEROES, MAPS, SURFACE_MULT, PHYS, publicPlayers,
+    HEROES, MAPS, SURFACE_MULT, PHYS, publicPlayers, RESPAWN_MS, BOT, pickRespawn, updateBot,
+    ENDLESS_ROUND_SECS, MAP_ORDER, applyHero, rotateMap,
     getSolids, surfaceTop, getFloorElevation, getCeiling, collidesAt, slideMove,
     getSurfaceAt, intersectAABB, intersectSolid
   };
